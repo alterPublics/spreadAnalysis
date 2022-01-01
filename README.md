@@ -1,4 +1,4 @@
-# spreadAnalysis-0.2
+# spreadAnalysis-0.3
 
 clone library and install to start using.
 
