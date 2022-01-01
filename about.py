@@ -1,0 +1,6 @@
+__title__ = "spreadAnalysis"
+__version__ = "0.2"
+__summary__ = "Catch spread of links, phrases and mentions accross social media and the web"
+__uri__ = "https://github.com/alterPublics/spreadAnalysis"
+__author__ = "Jakob Kristensen"
+__email__ = "jakobbk@ruc.dk"
