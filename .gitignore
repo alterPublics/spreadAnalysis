@@ -50,5 +50,5 @@ coverage.xml
 docs/_build/
 
 .DS_Store
-
+DS_Store
 auth/
