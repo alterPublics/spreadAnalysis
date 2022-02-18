@@ -1,5 +1,6 @@
 from os import environ, path
 from dotenv import load_dotenv
+import dotenv
 import json
 
 class Config:
@@ -13,7 +14,9 @@ class Config:
 
         basedir = "/".join(str(path.abspath(path.dirname(__file__)))\
             .split("/")[:-1])
-        load_dotenv(path.join(basedir+"/config/", '.env'))
+        de_file_path = path.join(basedir+"/config/", '.env')
+        load_dotenv(de_file_path)
+        #dotenv.set_key(de_file_path, "MAIN_PATH", basedir)
 
     def set_env(self):
 
