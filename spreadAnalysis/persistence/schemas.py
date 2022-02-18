@@ -119,7 +119,8 @@ class Spread:
 				if len(url_list) > 0:
 					_val = url_list[0]
 		if method=="tiktok":
-			_val = str(data["video"]["playAddr"])
+			if "playAddr" in data["video"]:
+				_val = str(data["video"]["playAddr"])
 		if method=="gab":
 			url_list = LinkCleaner().get_url_list_from_text(Spread._get_message_text(data=data,method=method))
 			if len(url_list) > 0:
@@ -386,6 +387,40 @@ class Spread:
 		return _val
 
 	@staticmethod
+	def _get_platform_type(method=None,data=None):
+
+		_val = None
+		if method=="crowdtangle":
+			if data["platform"]=="Instagram":
+				_val = "Instagram"
+			elif "group" in str(data["account"]["accountType"]).lower():
+				_val = "Facebook Group"
+			else:
+				_val = "Facebook Page"
+		if method=="twitter2":
+			_val = "Twitter"
+		if method=="google":
+			_val = "Google"
+		if method=="facebook_browser":
+			_val = "Facebook Profile"
+		if method=="vkontakte":
+			_val = "Vkontakte"
+		if method=="reddit":
+			_val = "Reddit"
+		if method=="majestic":
+			_val = "Majestic"
+		if method=="youtube":
+			_val = "Youtube"
+		if method=="telegram":
+			_val = "Telegram"
+		if method=="tiktok":
+			_val = "Tiktok"
+		if method=="gab":
+			_val = "Gab"
+
+		return _val
+
+	@staticmethod
 	def _get_link_to_actor(method=None,data=None):
 
 		_val = None
@@ -583,7 +618,6 @@ class Spread:
 				_val = "https://www.reddit.com"+data["permalink"]
 			else:
 				_val = ""
-			_val = str(data["full_link"])
 		if method=="majestic":
 			_val = str(data["SourceURL"])
 		if method=="youtube":
@@ -687,8 +721,42 @@ class Spread:
 		url_list = Spread._get_links_in_text(method=method,data=data)
 		if url_list is not None:
 			for url in url_list.split(","):
-				if "t.me/" in url: new_url_list.append(url)
-				break
+				if "/t.me/" in url:
+					#url = "https://t.me/"+url.split("t.me/")[-1].split("/")[0]
+					new_url_list.append(url)
+					break
+
+			_val = ",".join(new_url_list)
+		return _val
+
+	@staticmethod
+	def _get_message_gab_mention(method=None,data=None):
+
+		_val = None
+		new_url_list = []
+		url_list = Spread._get_links_in_text(method=method,data=data)
+		if url_list is not None:
+			for url in url_list.split(","):
+				if "/gab.com/" in url:
+					#url = "https://t.me/"+url.split("t.me/")[-1].split("/")[0]
+					new_url_list.append(url)
+					break
+
+			_val = ",".join(new_url_list)
+		return _val
+
+	@staticmethod
+	def _get_message_yt_mention(method=None,data=None):
+
+		_val = None
+		new_url_list = []
+		url_list = Spread._get_links_in_text(method=method,data=data)
+		if url_list is not None:
+			for url in url_list.split(","):
+				if "youtube.com/" in url and "channel/" in url:
+					#url = "https://t.me/"+url.split("t.me/")[-1].split("/")[0]
+					new_url_list.append(url)
+					break
 
 			_val = ",".join(new_url_list)
 		return _val

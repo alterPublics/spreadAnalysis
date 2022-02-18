@@ -105,14 +105,14 @@ class Net(NetworkUtils):
 			new_data[node]=data_row
 		return new_data
 
-	def add_node_and_edges(self,node0,node1):
+	def add_node_and_edges(self,node0,node1,node_type0="node",node_type1="node",weight=1):
 
-		if node0 not in self.g: self.g.add_node(node0)
-		if node1 not in self.g: self.g.add_node(node1)
+		if node0 not in self.g: self.g.add_node(node0,node_type=node_type0)
+		if node1 not in self.g: self.g.add_node(node1,node_type=node_type1)
 		if self.g.has_edge(node0,node1):
-			self.g.get_edge_data(node0,node1)['weight'] += 1
+			self.g.get_edge_data(node0,node1)['weight'] += weight
 		else:
-			self.g.add_edge(node0,node1,weight=1,)
+			self.g.add_edge(node0,node1,weight=weight,)
 
 class BipartiteNet(Net):
 
@@ -124,6 +124,7 @@ class BipartiteNet(Net):
 
 		self.links_to_own_website = links_to_own_website
 		self.title = self.title + "_BI"
+		self.g = nx.Graph()
 
 	def create_net(self,node0_col,node1_col,skip_domains=False):
 
@@ -134,8 +135,7 @@ class BipartiteNet(Net):
 			if row[node0_col] is not None:
 				node0 = row[node0_col]
 				node1 = row[node1_col]
-				#print (row)
-				self.add_node_and_edges(node0,node1)
+				self.add_node_and_edges(node0,node1,node_type0=node0_col,node_type1=node1_col)
 
 		if self.links_to_own_website is not None:
 			for actor_username, links in self.links_to_own_website.items():

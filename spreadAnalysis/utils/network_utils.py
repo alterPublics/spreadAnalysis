@@ -135,18 +135,17 @@ class NetworkUtils:
 	@classmethod
 	def filter_by_degrees(cls,g,degree=1,skip_nodes={},preserve_skip_node_edges=True):
 
-		temp_graph = g.copy()
-		deg = nx.degree(temp_graph)
+		deg = nx.degree(g)
 		if preserve_skip_node_edges:
 			new_skip_nodes = set([])
-			for node in temp_graph.nodes():
+			for node in list(g.nodes()):
 				if node in skip_nodes:
 					for org, edge in list(g.edges(node)):
 						new_skip_nodes.add(org)
 						new_skip_nodes.add(edge)
 			skip_nodes = new_skip_nodes
 
-		for node in temp_graph.nodes():
+		for node in list(g.nodes()):
 			if deg[node] < degree:
 				if node in skip_nodes:
 					pass

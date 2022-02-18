@@ -60,7 +60,7 @@ class Youtube:
 
         return upload_list
 
-    def _get_video_ids_from_playlist(self,playlist,max_results=5000):
+    def _get_video_ids_from_playlist(self,playlist,max_results=35000):
 
         video_ids = []
         call_url = self.base_url+"/playlistItems"

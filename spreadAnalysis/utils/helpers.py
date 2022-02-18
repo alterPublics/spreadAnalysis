@@ -4,6 +4,8 @@ import random
 import time
 from langdetect import detect_langs
 import fasttext
+from itertools import islice
+from operator import itemgetter
 
 def to_default_date_format(date_str):
 
@@ -43,7 +45,7 @@ def create_date_ranges(start_date,end_date,interval=2,overlap=0):
     date_ranges.append((current_since_date,until_date))
     return date_ranges
 
-def get_next_end_date(end_date,stop_date,interval=2,max_interval=365):
+def get_next_end_date(end_date,stop_date,interval=2,max_interval=365,check_start_date=None):
 
     if not isinstance(end_date,datetime):
         end_date = datetime.strptime(str(end_date)[:10],"%Y-%m-%d")
@@ -55,6 +57,9 @@ def get_next_end_date(end_date,stop_date,interval=2,max_interval=365):
         next_end_date = end_date+timedelta(days=max_interval)
     if next_end_date > stop_date:
         next_end_date = stop_date
+    if check_start_date is not None:
+        if str(next_end_date)[:10] == str(check_start_date)[:10]:
+            next_end_date = next_end_date+timedelta(days=interval+2)
     return next_end_date
 
 def get_diff_in_days(start_date,end_date):
@@ -65,6 +70,22 @@ def get_diff_in_days(start_date,end_date):
 def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
+def chunks_dict(data, SIZE=10000):
+    it = iter(data)
+    for i in range(0, len(data), SIZE):
+        yield {k:data[k] for k in islice(it, SIZE)}
+
+def chunks_optimized(data, n_chunks=2):
+
+    chunked = {n:{} for n in range(n_chunks)}
+    chunks_allo = {n:0 for n in range(n_chunks)}
+    for k,v in data.items():
+        lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
+        chunked[lowest][k]=v
+        chunks_allo[lowest]+=len(v)
+    print (chunks_allo)
+    return list([v for v in chunked.values()])
 
 def random_wait(between=(1,3),skip_wait=None):
 

@@ -27,8 +27,7 @@ class LinkUtils:
 
 		pass
 
-	@staticmethod
-	def single_clean_url(url):
+	def single_clean_url(self,url):
 
 		new_url = str(url)
 		if "&fbclid" in new_url: new_url = new_url.split("&fbclid")[0]
@@ -65,12 +64,25 @@ class LinkUtils:
 
 		if "](" in str(new_url): new_url = new_url.split("](")[0]
 
-		return new_url
+		return self._recursive_trim(new_url)
 
 	def _recursive_trim(self,url):
 
 		while url[-1].isalnum() == False:
 			url = url[:-1]
+		return url
+
+	def sanitize_url_prefix(self,url):
+
+		if "WWW." in url: url = url.replace("WWW.","www.")
+		if "HTTPS:" in url: url = url.replace("HTTPS:","https:")
+		if "HTTP:" in url: url = url.replace("HTTP:","http:")
+		if "www." in url and "http" in url:
+			url = url.replace("www.","")
+		if "www." in url and "http" not in url:
+			url = url.replace("www.","https://")
+		if "http:" in url and "https:" not in url:
+			url = url.replace("http:","https:")
 		return url
 
 	def strip_backslash(self,url):
@@ -79,26 +91,26 @@ class LinkUtils:
 			url = str(url)[:-1]
 		return url
 
-	def get_url_list_from_text(self,inp_text):
+	def get_url_list_from_text(self,inp_text,sanitize=False):
 
-		new_inp_text = inp_text
-		urls = []
-		while True:
-			urls_attached = len(urls)
-			for s_string in ["(?P<url>https?://[^\s]+)","(?P<url>http?://[^\s]+)","(?P<url>www?.[^\s]+)"]:
-				try:
-					found_url = re.search(s_string, new_inp_text)
-				except Exception as e:
-					print (e)
-					found_url = None
-				if found_url is not None:
-					real_url = found_url.group("url")
-					urls.append(real_url)
-					new_inp_text = new_inp_text.replace(str(real_url),"")
-			if len(urls) <= urls_attached:
-				break
-		return urls
 
+		found_urls = []
+		duplicate_urls = set([])
+		inp_text = str(inp_text)
+		for s_string in ["(?P<url>https?://[^\s]+)","(?P<url>http?://[^\s]+)","(?P<url>www?.[^\s]+)"]:
+			matched = re.findall(s_string, inp_text)
+			for found_url in matched:
+				duplicate_check_url = self.sanitize_url_prefix(found_url)
+				if duplicate_check_url not in duplicate_urls:
+					if sanitize:
+						if "www." in found_url and "http" in found_url:
+							found_url = found_url.replace("www.","")
+						if found_url not in set(found_urls):
+							found_urls.append(self.sanitize_url_prefix(found_url))
+					else:
+						found_urls.append(found_url)
+				duplicate_urls.add(duplicate_check_url)
+		return list(found_urls)
 
 	def remove_url_prefix(self,url):
 
@@ -277,7 +289,7 @@ class LinkUtils:
 
 		if "http" not in url: url = "http://"+url
 		url = self._recursive_trim(url)
-		url = LinkUtils.single_clean_url(url)
+		url = self.single_clean_url(url)
 		headers = {'User-Agent':random.choice(self.USER_AGENTS)}
 
 		# Get initial response from remote server
@@ -337,7 +349,7 @@ class LinkUtils:
 					print (e)
 			else:
 				unpacked_url = self._recursive_trim(full_url)
-				unpacked_url = LinkUtils.single_clean_url(unpacked_url)
+				unpacked_url = self.single_clean_url(unpacked_url)
 				title = full_url
 				raw_text = ""
 				special_url = self.extract_special_url(full_url)
@@ -369,6 +381,8 @@ class LinkCleaner(LinkUtils):
 		else:
 			print ("There is more than one url in input. Returning as a list.")
 			return url_list
+		if self.scraper is not None:
+			self.scraper.browser.quit()
 
 	def get_urls_from_text(self,input_text):
 		url_list = self.get_clean_urls(input_text)
@@ -407,6 +421,8 @@ class LinkCleaner(LinkUtils):
 				username = str(url).split("/")[-1]
 			if "/" in username: username = username.split("/")[0]
 		elif "tiktok." in url:
+			if "@" not in url:
+				url = self.unpack_url(url,force_unpack=False)[0]
 			username = url.split("tiktok.")[-1].split("/")[1].split("?")[0].\
 				replace("@","")
 			if "/" in username: username = username.split("/")[0]

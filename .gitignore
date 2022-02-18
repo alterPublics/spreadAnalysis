@@ -49,6 +49,14 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+*.DS_Store
 .DS_Store
 DS_Store
 auth/
+
+# net files
+*.gexf
+*.csv
+*.xlsx
+*.env
+

@@ -24,6 +24,14 @@ def migrate_refs(main_path):
     referal_data_path = f'{main_path}/referal_data.p'
     referal_data = FlatFile(referal_data_path)
 
+    total_docs_inserted = 0
+    counts = set([])
+    data_rows = referal_data.data
+    referal_data = None
+
+    #data_rows = dict(list(data_rows.items())[len(data_rows)//2:])
+    #data_rows = dict(list(data_rows.items())[:len(data_rows)//2])
+
     col = CollectMongo(main_path)
     #prev_post_ids = col.mdb.get_keys_from_db(col.mdb.database["post"],use_col="message_id")
     #prev_url_ids_post_ids = col.mdb.get_key_pairs_from_db(col.mdb.database["url_post"],"input","message_id")
@@ -32,9 +40,8 @@ def migrate_refs(main_path):
     prev_pulls = col.get_pulls("url")
     prev_pulls_here = set([])
 
-    total_docs_inserted = 0
-    counts = set([])
-    for ref, ref_dat in referal_data.data.items():
+    print (len(data_rows))
+    for ref, ref_dat in data_rows.items():
         ref_dat = ref_dat["data"]
         for method, source_dat in ref_dat.items():
             if len(source_dat["output"]) > 0:
@@ -58,6 +65,7 @@ def migrate_refs(main_path):
                 print ("ref docs inserted: " + str(total_docs_inserted))
                 counts.add(round(total_docs_inserted, -4))
     col = None
+    referal_data = None
 
 def migrate_actors(main_path):
 
@@ -99,6 +107,7 @@ def migrate_actors(main_path):
                 print ("actor docs inserted: " + str(total_docs_inserted))
                 counts.add(round(total_docs_inserted, -4))
     col = None
+    actor_data = None
 
 def migrate_domains(main_path):
 
@@ -138,26 +147,28 @@ def migrate_domains(main_path):
         total_docs_inserted+=1
         print ("domain urls inserted: " + str(total_docs_inserted))
     col = None
+    domain_data = None
+    referal_data = None
 
 mains = []
 titles = []
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/fivepillar/euvsdisinfo")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/fivepillar/midtifleisen")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/fivepillar/fivepillar")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/fivepillar/no_gen5")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/mainmed/norway")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/NorgeDis/danskdis_exploration")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/NorgeDis/p10_exploration")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/NorgeDis/peacedata")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/NorgeDis/sott")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/altmed_germany")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/altmed_sweden")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/altmed_austria")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/altmed_denmark")
-mains.append("/Users/jakobbk/Documents/postdoc/downloaded_spread_data/norway")
+#mains.append("/home/alterpublics/downloaded_spread_data/fivepillar/euvsdisinfo")
+#mains.append("/home/alterpublics/downloaded_spread_data/fivepillar/midtifleisen")
+#mains.append("/home/alterpublics/downloaded_spread_data/fivepillar/fivepillar")
+#mains.append("/home/alterpublics/downloaded_spread_data/fivepillar/no_gen5")
+#mains.append("/home/alterpublics/downloaded_spread_data/mainmed/norway")
+#mains.append("/home/alterpublics/downloaded_spread_data/NorgeDis/danskdis_exploration")
+#mains.append("/home/alterpublics/downloaded_spread_data/NorgeDis/p10_exploration")
+#mains.append("/home/alterpublics/downloaded_spread_data/NorgeDis/peacedata")
+#mains.append("/home/alterpublics/downloaded_spread_data/NorgeDis/sott")
+mains.append("/home/alterpublics/downloaded_spread_data/altmed_germany")
+#mains.append("/home/alterpublics/downloaded_spread_data/altmed_austria")
+#mains.append("/home/alterpublics/downloaded_spread_data/altmed_norway")
+#mains.append("/home/alterpublics/downloaded_spread_data/altmed_denmark")
+#mains.append("/home/alterpublics/downloaded_spread_data/altmed_sweden")
 
-titles.append("norge_dis_iteration1")
-titles.append("midtifleisen")
+#mains.append("/home/alterpublics/downloaded_spread_data/altmed_norway")
+#mains.append("/home/alterpublics/downloaded_spread_data/mainmed_norway")
 
 for main_path in mains:
     print (main_path)
@@ -165,9 +176,9 @@ for main_path in mains:
     #print (len(col.mdb.get_keys_from_db(col.mdb.database["post"],use_col="message_id")))
     #sys.exit()
     col.mdb.update_custom_data(main_path)
-    col.mdb.update_platform_info()
-    col.mdb.update_aliases(main_path)
+    #col.mdb.update_platform_info()
+    #col.mdb.update_aliases(main_path)
     #col = None
-    migrate_domains(main_path)
-    migrate_refs(main_path)
-    migrate_actors(main_path)
+    #migrate_domains(main_path)
+    #migrate_refs(main_path)
+    #migrate_actors(main_path)

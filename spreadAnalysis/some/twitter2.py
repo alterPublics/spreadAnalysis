@@ -2,9 +2,10 @@ from spreadAnalysis.scraper.tw_scraper import TwScraper
 from spreadAnalysis.reqs.req import Req
 import spreadAnalysis.utils.helpers as hlp
 from spreadAnalysis.utils.link_utils import LinkCleaner
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import sys
+import urllib.parse
 
 class Twitter2:
 
@@ -135,13 +136,16 @@ class Twitter2:
                 "output":[],
                 "method":"twitter2"}
         start_date, end_date = hlp.get_default_dates(start_date,end_date)
+        if end_date is None or str(end_date)[:10] == str(datetime.now())[:10]: end_time = str((datetime.now()-timedelta(seconds=60)).time())[:8]
+        else: end_time = "23:59:59"
         call_url = self.base_url+'/tweets/search/all'
-        params = {'query':'"{0}"'.format(url),
-                    'start_time':str(start_date)[:10]+'T00:00:00Z',
-                    'end_time':str(end_date)[:10]+'T00:00:00Z',
+        params = {'query':'url:"{0}"'.format(url),
+                    'start_time':str(start_date)[:10]+'T00:01:00Z',
+                    'end_time':str(end_date)[:10]+'T{0}Z'.format(end_time),
                     'max_results':100}
         params.update(self._get_exp_params())
         if extra_params is not None: params.update(extra_params)
+        #params["query"]=urllib.parse.quote_plus(str(params["query"]))
         headers = self._get_headers()
 
         return self._get_data(data,call_url,params,headers,wait_time=wait_time,max_results=max_results)
@@ -150,14 +154,16 @@ class Twitter2:
 
         actor = LinkCleaner().extract_username(actor,never_none=True)
         start_date, end_date = hlp.get_default_dates(start_date,end_date)
+        if end_date is None or str(end_date)[:10] == str(datetime.now())[:10]: end_time = str((datetime.now()-timedelta(seconds=60)).time())[:8]
+        else: end_time = "23:59:59"
         data = {"input":actor,
                 "input_type":"actor",
                 "output":[],
                 "method":"twitter2"}
         call_url = self.base_url+'/tweets/search/all'
         params = {'query':'from:{0}'.format(actor),
-                    'start_time':start_date+'T00:00:00Z',
-                    'end_time':end_date+'T00:00:00Z',
+                    'start_time':start_date+'T00:01:00Z',
+                    'end_time':end_date+'T23:59:59Z',
                     'max_results':100}
         params.update(self._get_exp_params())
         headers = self._get_headers()
@@ -173,17 +179,22 @@ class Twitter2:
         seen_tweet_ids = set([])
         for start_date,end_date in hlp.create_date_ranges(start_date,end_date,interval=400):
             #extra_params = {'query':'"{0}" (lang:da OR lang:no OR lang:sv OR lang:fi OR lang:de OR lang:nl)'.format(domain)}
-            extra_params = {'query':'{0}'.format(domain)}
-            dom_data = self.url_referals(domain,start_date=start_date,end_date=end_date,extra_params=extra_params)
+            call_domain = domain
+            extra_params = {'query':'url:"{0}"'.format(call_domain)}
+            dom_data = self.url_referals(call_domain,start_date=start_date,end_date=end_date,extra_params=extra_params)
             #print (" - ".join([domain,str(start_date),str(end_date),str(len(dom_data["output"]))]))
             for doc in dom_data["output"]:
                 new_url = None
+                old_url = None
                 if "entities" in doc and "urls" in doc["entities"]:
                     for url_ent in doc["entities"]["urls"]:
                         url = url_ent["expanded_url"]
+                        if "twitter." not in url: old_url = url
                         if LinkCleaner().remove_url_prefix(str(domain)) in str(url):
                             new_url = LinkCleaner().single_clean_url(str(url))
                             break
+                if new_url is None and old_url is not None:
+                    new_url = LinkCleaner().single_clean_url(str(old_url))
                 if new_url is not None:
                     if new_url not in new_data:
                         new_data.update({new_url:{"input":new_url,
@@ -231,8 +242,8 @@ class Twitter2:
                 "output":[],
                 "method":"twitter2"}
         call_url = self.base_url+'/users/{0}/tweets'.format(actor)
-        params = {  'start_time':start_date+'T11:59:59Z',
-                    'end_time':end_date+'T00:00:00Z',
+        params = {  'start_time':start_date+'T00:01:00Z',
+                    'end_time':end_date+'T23:59:59Z',
                     'max_results':100,
                     'exclude':"replies"}
         params.update(self._get_exp_params())

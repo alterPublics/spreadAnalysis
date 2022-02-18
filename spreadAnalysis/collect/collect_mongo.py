@@ -13,7 +13,10 @@ from spreadAnalysis.some.gab import Gab
 from spreadAnalysis.io.config_io import Config
 from spreadAnalysis.persistence.schemas import Spread
 import spreadAnalysis.utils.helpers as hlp
-from datetime import datetime
+from spreadAnalysis.scraper.scraper import Scraper
+from datetime import datetime, timedelta
+import sys
+from newspaper import Article
 
 class CollectMongo:
 
@@ -115,34 +118,48 @@ class CollectMongo:
 
         return prev_keys
 
-    def resolve_dates_from_pulls(self,attempts,start_date,end_date):
+    def resolve_dates_from_pulls(self,input,method,start_date,end_date):
 
-        new_end_date = None
-        new_start_date = None
-        attempt_sd = [hlp.to_default_date_format(a["start_date"]) for a in attempts if a["returned_posts"] is not None]
-        attempt_ed = [hlp.to_default_date_format(a["end_date"]) for a in attempts if a["returned_posts"] is not None]
-        if len(attempt_sd) > 0 and len(attempt_ed) > 0:
-            min_start_date = min(attempt_sd)
-            max_end_date = max(attempt_ed)
-            if hlp.to_default_date_format(end_date) > max_end_date:
-                new_start_date = str(max_end_date)[:10]
-                new_end_date = str(end_date)
-            elif hlp.to_default_date_format(start_date) < min_start_date:
-                new_end_date = str(min_start_date)[:10]
-                new_start_date = str(start_date)
+        attempts = []
+        if isinstance(input,list):
+            for inp in input:
+                prev_pulls = list(self.mdb.database["pull"].find({"input":inp,"method":method}))
+                if len(list(prev_pulls)) > 0:
+                    attempts.extend(list(prev_pulls[0]["attempts"]))
+        else:
+            prev_pulls = list(self.mdb.database["pull"].find({"input":input,"method":method}))
+            if len(list(prev_pulls)) > 0:
+                attempts = prev_pulls[0]["attempts"]
+        if len(attempts) > 0:
+            new_end_date = None
+            new_start_date = None
+            attempt_sd = [hlp.to_default_date_format(a["start_date"]) for a in attempts if a["returned_posts"] is not None]
+            attempt_ed = [hlp.to_default_date_format(a["end_date"]) for a in attempts if a["returned_posts"] is not None]
+            if len(attempt_sd) > 0 and len(attempt_ed) > 0:
+                min_start_date = min(attempt_sd)
+                max_end_date = max(attempt_ed)
+                if hlp.to_default_date_format(end_date) > max_end_date:
+                    new_start_date = str(max_end_date)[:10]
+                    new_end_date = str(end_date)
+                elif hlp.to_default_date_format(start_date) < min_start_date:
+                    new_end_date = str((min_start_date+timedelta(days=1)))[:10]
+                    new_start_date = str(start_date)
+            else:
+                new_end_date = end_date
+                new_start_date = start_date
         else:
             new_end_date = end_date
             new_start_date = start_date
 
         return new_start_date, new_end_date
 
-    def process_pull(self,input,method,input_type,data,start_date,end_date,prev_pulls,extra_fields={}):
+    def process_pull(self,input,method,input_type,data,start_date,end_date,extra_fields={}):
 
         attempt={"returned_posts":None,"start_date":start_date,
                 "end_date":end_date,"inserted_at":datetime.now()}
         if data is not None:
             attempt["returned_posts"]=len(data)
-        if input in prev_pulls and method in prev_pulls[input]:
+        if self.mdb.database["pull"].count_documents({ "input": input ,"method": method }, limit = 1) != 0:
             self.mdb.insert_into_nested(self.mdb.database["pull"],attempt,
                 [("input",input),("method",method)])
         else:
@@ -160,21 +177,20 @@ class CollectMongo:
             if not d["method"] in prev_pulls[d["input"]]: prev_pulls[d["input"]][d["method"]]=d
         return prev_pulls
 
-    def get_aliases(self):
-
-        aliases = {}
-        for d in self.mdb.get_data_from_db(self.mdb.database["alias"]):
-            if not d["actor"] in aliases: aliases[d["actor"]]=[]
-            aliases[d["actor"]].append(d)
-        return aliases
-
     def get_clean_url(self,org_url,is_domain=False):
 
-        clean_url = LinkCleaner().clean_url(org_url,with_unpack=True)["unpacked"]
-        clean_url = LinkCleaner().strip_backslash(clean_url)
-        if LinkCleaner().is_url_domain(clean_url) and not is_domain:
+        #scrp = Scraper(settings={"change_user_agent":True,"exe_path":self.conf.CHROMEDRIVER})
+        #scrp.browser_init()
+        scrp = None
+        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=False)
+        if not isinstance(clean_url,list):
+            clean_url = clean_url["unpacked"]
+            clean_url = LinkCleaner().strip_backslash(clean_url)
+        else:
             clean_url = None
-        elif is_domain and not LinkCleaner().is_url_domain(clean_url):
+        if clean_url is not None and LinkCleaner().is_url_domain(clean_url) and not is_domain:
+            clean_url = None
+        elif clean_url is not None and is_domain and not LinkCleaner().is_url_domain(clean_url):
             clean_url = "https://"+LinkCleaner().extract_domain(clean_url)
         return clean_url
 
@@ -198,9 +214,16 @@ class CollectMongo:
                             methods[platform["platform_source"]]=method
         return methods
 
+    def url_text_collect():
+
+        urls = self.mdb.database["clean_url"]
+        article = Article(url)
+        article.download()
+        article.parse()
+
     def url_collect(self,org_urls,input_sd,input_ed):
 
-        org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "0"])
+        org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "0" or str(d["Domain"]) == "0.0"])
         cleaned_urls = {doc["url"]:doc["clean_url"] for doc in \
             self.mdb.database["clean_url"].find({},{ "url": 1, "clean_url": 1})}
         if self.low_memory:
@@ -209,7 +232,7 @@ class CollectMongo:
         else:
             prev_post_ids = self.mdb.get_keys_from_db(self.mdb.database["post"],use_col="message_id")
             prev_url_ids_post_ids = self.mdb.get_key_pairs_from_db(self.mdb.database["url_post"],"input","message_id")
-        prev_pulls = self.get_pulls("url")
+        #prev_pulls = self.get_pulls("url")
 
         for org_url in org_urls:
             if org_url in cleaned_urls:
@@ -222,17 +245,17 @@ class CollectMongo:
             if cleaned_url is None:
                 continue
 
+            resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("url").items():
                 start_date, end_date = input_sd, input_ed
-                if org_url in prev_pulls and method_name in prev_pulls[org_url]:
-                    start_date, end_date = self.resolve_dates_from_pulls(prev_pulls[org_url][method_name]["attempts"],start_date,end_date)
-                    if start_date is None:
-                        continue
+                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                if start_date is None:
+                    continue
                 try:
                     data = list(method.url_referals(cleaned_url,start_date=start_date,end_date=end_date)["output"])
                 except:
                     data = None
-                self.process_pull(org_url,method_name,"url",data,start_date,end_date,prev_pulls)
+                self.process_pull(org_url,method_name,"url",data,start_date,end_date)
 
                 if data is not None:
                     prev_post_ids = self.save_data(self.mdb.database["post"],
@@ -252,45 +275,51 @@ class CollectMongo:
         else:
             prev_post_ids = self.mdb.get_keys_from_db(self.mdb.database["post"],use_col="message_id")
             prev_actor_ids_post_ids = self.mdb.get_key_pairs_from_db(self.mdb.database["actor_post"],"input","message_id")
-        prev_pulls = self.get_pulls("actor")
-        aliases = self.get_aliases()
+        #prev_pulls = self.get_pulls("actor")
+        aliases = self.mdb.get_aliases()
+        actor_aliases = self.mdb.get_actor_aliases()
         methods = self.get_methods("actor")
         platform_to_source = {d["platform_dest"]:d["platform_source"] for d in self.platform_info}
-        platform_to_source["Instagram"]="crowdtangle_insta"
+        if "Instagram" in platform_to_source: platform_to_source["Instagram"]="crowdtangle_insta"
 
         for actor_doc in org_actors:
             actor = actor_doc["Actor"]
-            for alias in aliases[actor]:
-                platform_alias = alias["alias"]
-                method = methods[platform_to_source[alias["platform"]]]
-                method_name = platform_to_source[alias["platform"]]
-                start_date, end_date = input_sd, input_ed
-                if actor in prev_pulls and method_name in prev_pulls[actor]:
-                    start_date, end_date = self.resolve_dates_from_pulls(prev_pulls[actor][method_name]["attempts"],start_date,end_date)
-                    if start_date is None:
-                        continue
-                try:
-                    data = list(method.actor_content(platform_alias,start_date=start_date,end_date=end_date)["output"])
-                except:
-                    data = None
-                self.process_pull(actor,method_name,"actor",data,start_date,end_date,prev_pulls)
+            if actor in aliases:
+                for alias in aliases[actor]:
+                    if alias["platform"] in platform_to_source:
+                        platform_alias = alias["alias"]
+                        print (platform_alias)
+                        method = methods[platform_to_source[alias["platform"]]]
+                        method_name = platform_to_source[alias["platform"]]
+                        start_date, end_date = input_sd, input_ed
+                        resolve_inputs = [actor]
+                        if alias["platform"] in actor_aliases:
+                            if platform_alias in actor_aliases[alias["platform"]]:
+                                for actor_alias in actor_aliases[alias["platform"]][platform_alias]:
+                                    resolve_inputs.append(actor_alias)
+                        resolve_inputs = list(set(resolve_inputs))
+                        start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                        if start_date is None:
+                            continue
+                        try:
+                            data = list(method.actor_content(platform_alias,start_date=start_date,end_date=end_date)["output"])
+                        except:
+                            data = None
+                        self.process_pull(actor,method_name,"actor",data,start_date,end_date)
 
-                if data is not None:
-                    if method_name == "crowdtangle_insta": method_name = "crowdtangle"
-                    prev_post_ids = self.save_data(self.mdb.database["post"],
-                        data,method_name,prev_post_ids,Spread._get_message_id,update_key_col="message_id")
-                    prev_actor_ids_post_ids = self.save_data(self.mdb.database["actor_post"],
-                        [{"input":actor,"message_id":Spread._get_message_id(method=method_name,data=doc)} for doc in data],
-                        method_name,prev_actor_ids_post_ids,("input","message_id"),update_key_col=("input","message_id"))
-                    print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(platform_alias) + " - " + str(method_name) + " - " + str(len(data)))
-                else:
-                    print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(platform_alias) + " - " + str(method_name) + " - " + str("ERROR in Data Retrieval"))
+                        if data is not None:
+                            if method_name == "crowdtangle_insta": method_name = "crowdtangle"
+                            prev_post_ids = self.save_data(self.mdb.database["post"],
+                                data,method_name,prev_post_ids,Spread._get_message_id,update_key_col="message_id")
+                            prev_actor_ids_post_ids = self.save_data(self.mdb.database["actor_post"],
+                                [{"input":actor,"message_id":Spread._get_message_id(method=method_name,data=doc)} for doc in data],
+                                method_name,prev_actor_ids_post_ids,("input","message_id"),update_key_col=("input","message_id"))
+                            print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(platform_alias) + " - " + str(method_name) + " - " + str(len(data)))
+                        else:
+                            print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(platform_alias) + " - " + str(method_name) + " - " + str("ERROR in Data Retrieval"))
 
-    def domain_collect(self,org_urls,input_sd,input_ed,actor_web=True):
+    def domain_collect(self,org_urls,input_sd,input_ed,actor_web=False):
 
-        org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "1"])
-        if actor_web: org_urls.update(set([d["Website"] for d in \
-            self.mdb.get_data_from_db(self.mdb.database["actor"])]))
         cleaned_urls = {doc["url"]:doc["clean_url"] for doc in \
             self.mdb.database["clean_url"].find({},{ "url": 1, "clean_url": 1})}
         if self.low_memory:
@@ -301,7 +330,7 @@ class CollectMongo:
             prev_post_ids = self.mdb.get_keys_from_db(self.mdb.database["post"],use_col="message_id")
             prev_url_ids_post_ids = self.mdb.get_key_pairs_from_db(self.mdb.database["url_post"],"input","message_id")
             prev_domain_ids_url_ids = self.mdb.get_key_pairs_from_db(self.mdb.database["domain_url"],"input","url")
-        prev_pulls = self.get_pulls("domain")
+        #prev_pulls = self.get_pulls("domain")
 
         for org_url in org_urls:
             if org_url in cleaned_urls:
@@ -314,24 +343,24 @@ class CollectMongo:
             if cleaned_url is None:
                 continue
 
+            resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("domain").items():
                 start_date, end_date = input_sd, input_ed
-                if org_url in prev_pulls and method_name in prev_pulls[org_url]:
-                    start_date, end_date = self.resolve_dates_from_pulls(prev_pulls[org_url][method_name]["attempts"],start_date,end_date)
-                    if start_date is None:
-                        continue
+                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                if start_date is None:
+                    continue
                 l_start_date, l_end_date = start_date, start_date
                 current_interval = self.MIN_DATE_RANGE_INTERVAL
                 while hlp.to_default_date_format(l_end_date) < hlp.to_default_date_format(end_date):
                     if method_name == "majestic":
                         current_interval = 365
-                    l_end_date = hlp.get_next_end_date(l_start_date,end_date,interval=current_interval,max_interval=self.MAX_DATE_RANGE_INTERVAL)
+                    l_end_date = hlp.get_next_end_date(l_start_date,end_date,interval=current_interval,max_interval=self.MAX_DATE_RANGE_INTERVAL,check_start_date=l_start_date)
                     try:
                         data = list(method.domain_referals(cleaned_url,start_date=l_start_date,end_date=l_end_date))
                         docs = self.unpack_output_docs(data)
                     except:
                         data = None
-                    self.process_pull(org_url,method_name,"domain",docs,l_start_date,l_end_date,prev_pulls)
+                    self.process_pull(org_url,method_name,"domain",docs,l_start_date,l_end_date)
 
                     if data is not None:
                         for url_doc in data:
@@ -350,7 +379,8 @@ class CollectMongo:
                         break
                     l_start_date = l_end_date
 
-    def collect(self,endpoint,platform_list=None,start_date=None,end_date=None,skip_existing=True,iterations=[]):
+    def collect(self,endpoint,title=None,platform_list=None,start_date=None \
+                ,end_date=None,skip_existing=True,iterations=[],actor_web=True):
 
         if endpoint == "domain": call_endpoint = "url"
         else: call_endpoint = endpoint
@@ -360,8 +390,8 @@ class CollectMongo:
             self.platform_info = [doc for doc in self.mdb.get_data_from_db(self.mdb.database["platform"])\
                 if doc["platform_dest"] in platform_list]
 
-        if len(iterations) > 0:
-            org_inputs = self.mdb.database[call_endpoint].find({ "Iteration": { "$in": iterations } })
+        if len(iterations) > 0 and title is not None:
+            org_inputs = self.mdb.database[call_endpoint].find({ "Iteration": { "$in": iterations },  "org_project_title":{"$eq":title}})
         else:
             org_inputs = self.mdb.database[call_endpoint].find({})
 
@@ -372,4 +402,12 @@ class CollectMongo:
         if endpoint == "actor":
             self.actor_collect(org_inputs,start_date,end_date)
         if endpoint == "domain":
+            org_inputs = set([d["Url"] for d in list(org_inputs) if str(d["Domain"]) == "1" or str(d["Domain"]) == "1.0"])
+            if actor_web:
+                if len(iterations) > 0 and title is not None:
+                    org_inputs.update(set([d["Website"] for d in \
+                        self.mdb.database["actor"].find({ "Iteration": { "$in": iterations },  "org_project_title":{"$eq":title}})]))
+                else:
+                    org_inputs.update(set([d["Website"] for d in \
+                        self.mdb.get_data_from_db(self.mdb.database["actor"])]))
             self.domain_collect(org_inputs,start_date,end_date)

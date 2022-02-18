@@ -8,8 +8,106 @@ from spreadAnalysis.utils import helpers as hlp
 import operator
 import numpy as np
 import pandas as pd
+from os import listdir
+from os.path import isfile, join
+from spreadAnalysis.persistence.mongo import MongoSpread
 
 some_prefixes = ["facebook.","twitter.","vk.com","t.me"]
+
+def show_url_disparities():
+
+    mdb = MongoSpread()
+    url_post_db = mdb.database["url_post"]
+    post_db = mdb.database["post"]
+    cur = url_post_db.find().limit(1000)
+    next_url_post = True
+    while next_url_post is not None:
+        next_url_post = next(cur, None)
+        post = post_db.find_one({"message_id":next_url_post["message_id"]})
+        post_url = Spread._get_message_link(data=post,method=post["method"])
+        org_url = next_url_post["input"]
+
+        post_url = LinkCleaner().single_clean_url(post_url)
+        post_url = LinkCleaner().sanitize_url_prefix(post_url)
+        org_url = LinkCleaner().single_clean_url(org_url)
+        org_url = LinkCleaner().sanitize_url_prefix(org_url)
+
+        if post_url != org_url:
+            print ()
+            print (org_url)
+            print (post_url)
+            print ()
+
+def show_domains_in_url_db(title):
+
+    mdb = MongoSpread()
+    urls = mdb.database["url"].find({"org_project_title":title})
+    df =  pd.DataFrame(list(urls))
+    df["domain"]=df['Url'].apply(lambda x: str(LinkCleaner().extract_domain(x)))
+    grouped = df[["Url","domain"]].groupby(['domain']) \
+                             .count() \
+                             .reset_index() \
+                             .sort_values(['Url'], ascending=False)
+    print (grouped[["domain"]].head(100).to_string(index=False))
+
+def show_some_accounts_in_db(main_path,some="Telegram"):
+
+    mdb = MongoSpread()
+    new_data = []
+    post_db = mdb.database["post"]
+    cur = post_db.find()
+    next_url_post = True
+    #prev_telegram_actors = set([d["actor_username"] for d in mdb.database["url_bi_network"].find({"platform":"telegram"})])
+    prev_telegram_actors = set([LinkCleaner().extract_username(d[some]) for d in mdb.database["actor"].find() if some in d and d[some] is not None])
+    row_count = 0
+    while next_url_post is not None:
+        next_url_post = next(cur, None)
+        if next_url_post is not None:
+            if some == "Telegram":
+                tel_mentions = Spread._get_message_telegram_mention(data=next_url_post,method=next_url_post["method"])
+            elif some == "TikTok":
+                tel_mentions = Spread._get_message_tiktok_mention(data=next_url_post,method=next_url_post["method"])
+            elif some == "Gab":
+                tel_mentions = Spread._get_message_gab_mention(data=next_url_post,method=next_url_post["method"])
+            elif some == "Youtube":
+                tel_mentions = Spread._get_message_yt_mention(data=next_url_post,method=next_url_post["method"])
+            if tel_mentions is not None:
+                tel_mentions = tel_mentions.split(",")
+                if len(tel_mentions) > 0 and tel_mentions[0] != "":
+                    for tm in tel_mentions:
+                        print (tm)
+                        if len(tm) > 2:
+                            try:
+                                tel_username = LinkCleaner()._recursive_trim( LinkCleaner().extract_username(tm) )
+                            except:
+                                print ("ERROR")
+                                #print (tm)
+                            print (tel_username)
+                            if tel_username not in prev_telegram_actors:
+                                row_count+=1
+                                new_data.append({some:tel_username,"row":row_count})
+    df = pd.DataFrame(new_data)
+    grouped = df.groupby([some]) \
+                             .count() \
+                             .reset_index() \
+                             .sort_values(['row'], ascending=False)
+    print (grouped.head(10000).to_string(index=False))
+    grouped.to_csv(main_path+"/{0}_exports.csv".format(some))
+
+def rip_majestic_exports(main_path,iteration=1):
+
+    all_backlinks = []
+    dir_path = main_path + "/majestic_exports"
+    url_file_path = main_path + "/Urls.xlsx"
+    prev_urls = set(list(MongoSpread().get_custom_file_as_df(url_file_path)["Url"]))
+    for csvfile in listdir(dir_path):
+        if ".csv" in str(csvfile):
+            load_csvfile = dir_path + "/" + csvfile
+            current_urls = set(list(MongoSpread().get_custom_file_as_df(load_csvfile)["Source URL"]))
+            for url in current_urls:
+                if not url in prev_urls:
+                    is_dom = int(LinkCleaner().is_url_domain(url))
+                    print (url + ";" + str(iteration) + ";" + str(is_dom))
 
 def view_data_structure_examples(main_path,data_type="referal_data"):
 
