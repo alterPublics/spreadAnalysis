@@ -510,6 +510,8 @@ def bi_to_uni_net(data,node0="actor",node1="url"):
 	pool = Pool(num_cores)
 	rep_data = {}
 	results = pool.map(bi_to_uni,net_data)
+	del net_data
+	gc.collect()
 	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
 	start_time = time.time()
 	g = nx.Graph()

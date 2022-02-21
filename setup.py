@@ -60,7 +60,8 @@ def setup_package(pkg_name):
             'matplotlib',
             'pymongo==3.9',
             'hdbscan',
-            'garc'
+            'garc',
+            'newspaper3k'
         ],
         python_requires='>=3.8',
         )

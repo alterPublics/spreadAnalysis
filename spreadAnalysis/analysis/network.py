@@ -31,7 +31,7 @@ class Net(NetworkUtils):
 
 	def write_net(self):
 
-		self.recursive_data_check()
+		#self.recursive_data_check()
 		nx.write_gexf(self.g, self.export_path+"/"+self.title+".gexf")
 
 	def recursive_data_check(self):
