@@ -61,7 +61,8 @@ def setup_package(pkg_name):
             'pymongo==3.9',
             'hdbscan',
             'garc',
-            'newspaper3k'
+            'newspaper3k',
+            'networkit'
         ],
         python_requires='>=3.8',
         )
