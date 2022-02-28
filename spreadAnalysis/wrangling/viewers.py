@@ -2,12 +2,17 @@ from spreadAnalysis.persistence.simple import FlatFile, Project
 from spreadAnalysis import _gvars as gvar
 from spreadAnalysis.utils.link_utils import LinkCleaner
 from spreadAnalysis.persistence.schemas import Spread
+from spreadAnalysis.scraper.scraper import Scraper
 from difflib import SequenceMatcher
 from spreadAnalysis.wrangling import wranglers as wrang
 from spreadAnalysis.utils import helpers as hlp
 import operator
 import numpy as np
+import time
+import sys
+from bs4 import BeautifulSoup
 import pandas as pd
+import requests
 from os import listdir
 from os.path import isfile, join
 from spreadAnalysis.persistence.mongo import MongoSpread
@@ -304,3 +309,100 @@ def print_urls_from_all_data(main_path):
     print (len(sorted_urls))
     print (len([u for u in sorted_urls if u[5] == True]))
     pd.DataFrame(csv_rows, columns=["Url","Iteration","Domain","Org Actor","Org Source"]).to_csv(main_path+"/url_print.csv")
+
+def choose_domains_from_list(inputs,export_path):
+
+    def save_data(prev_df,new_doms):
+
+        if prev_df is not None:
+            out_df = pd.concat([pd.DataFrame(new_doms),prev_df], axis=0)
+        out_df.to_csv(export_path,index=False)
+
+
+    try:
+        prev_df = pd.read_csv(export_path)
+        prev = set(list(prev_df["input_domain"]))
+    except:
+        prev_df = None
+        prev = set([])
+
+    if isinstance(inputs,str):
+        pass
+    else:
+        doms = inputs
+
+    scrp = Scraper(settings={"machine":"local"})
+    scrp.browser_init()
+    new_doms = []
+    for dom in doms:
+        if "merlins-tagebuch.com" in dom: continue
+        if not dom in prev:
+            call_url = "https://"+LinkCleaner()._recursive_trim(dom)
+            try:
+                response = requests.get(call_url,timeout=10)
+            except:
+                print ("skipping "+str(dom))
+                new_doms.append({"input_domain":dom,"ouput_domain":""})
+                save_data(prev_df,new_doms)
+                continue
+            if response.ok:
+                try:
+                    scrp.browser.get(call_url)
+                except KeyboardInterrupt:
+                    print ("skipping "+str(dom))
+                    new_doms.append({"input_domain":dom,"ouput_domain":""})
+                    save_data(prev_df,new_doms)
+                    continue
+                current_url = scrp.browser.current_url
+                answer = input("Press a to add or d to remove or exit to exit")
+                if answer == "a":
+                    new_doms.append({"input_domain":dom,"ouput_domain":current_url})
+                    save_data(prev_df,new_doms)
+                elif answer == "d":
+                    new_doms.append({"input_domain":dom,"ouput_domain":""})
+                elif answer == "exit":
+                    break
+
+    save_data(prev_df,new_doms)
+    scrp.browser_quit()
+
+def scrape_majestic_ref_dlinks(domains,main_path):
+
+    scrp = Scraper(settings={"machine":"local","cookie_path":"/Users/jakobbk/Documents/user_cookies/local_maj","cookie_user":"local_maj"})
+    scrp.browser_init()
+    #scrp.browser.get("https://majestic.com/account/login")
+    time.sleep(1)
+    unique_doms = set([])
+    all_doms = []
+    for dom in domains:
+        try:
+            dom = LinkCleaner().extract_domain(dom)
+            dom = LinkCleaner().remove_url_prefix(dom)
+            dom = LinkCleaner()._recursive_trim(dom)
+            print (dom)
+            indx = 0
+            for r in range(10):
+                scrp.browser.get("https://majestic.com/reports/site-explorer/referring-domains?q={0}&oq=https%3A%2F%2F{0}%2F&IndexDataSource=F&s={1}#key".format(dom,indx))
+                table_html = BeautifulSoup(str(scrp.browser.page_source),scrp.default_soup_parser).find("table",{"id":"vue-ref-domain-table"})
+                per_range_count = 0
+                if table_html is not None:
+                    for row in BeautifulSoup(str(table_html),scrp.default_soup_parser).find_all("tr"):
+                        for a in BeautifulSoup(str(table_html),scrp.default_soup_parser).find_all("a"):
+                            if str(a["href"])[0] != "/" and "javascript" not in str(a["href"]):
+                                new_dom = str(a["href"])
+                                per_range_count+=1
+                                if new_dom not in unique_doms:
+                                    print (new_dom)
+                                    all_doms.append({"domain":new_dom})
+                                    unique_doms.add(new_dom)
+                        if per_range_count > 45:
+                            break
+
+                else:
+                    break
+                indx+=50
+        except:
+            pass
+    scrp.browser_quit()
+    all_doms = pd.DataFrame(all_doms)
+    all_doms.to_csv(main_path+"/output_maj_dom.csv",index=False)

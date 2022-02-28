@@ -307,7 +307,8 @@ class Spread:
 		if method=="tiktok":
 			_val = None
 		if method=="gab":
-			_val = int(data["followers_count"])
+			if "followers_count" in data:
+				_val = int(data["followers_count"])
 
 		return _val
 

@@ -16,7 +16,7 @@ import Levenshtein
 
 def multi_find_urls(org_urls):
 
-    prev_urls = set(find_urls(selection={},urls=org_urls).keys())
+    prev_urls = set(find_urls(selection={},urls=org_urls))
     return prev_urls
 
 def check_url_similarities(dom_sorted_urls,urls):
@@ -29,33 +29,34 @@ def check_url_similarities(dom_sorted_urls,urls):
         dom = LinkCleaner().extract_special_url(url)
         if dom in dom_sorted_urls:
             for dom_url in dom_sorted_urls[dom]:
-                url = LinkCleaner().single_clean_url(url)
-                url = LinkCleaner().sanitize_url_prefix(url)
-                dom_url = LinkCleaner().single_clean_url(dom_url)
-                dom_url = LinkCleaner().sanitize_url_prefix(dom_url)
-                url = url.split("#")[0]
-                if url[-4] == "/amp": url = url[:-4]
-                dom_url = dom_url.split("#")[0]
-                if dom_url[-4] == "/amp": dom_url = dom_url[:-4]
-                url = LinkCleaner()._recursive_trim(url)
-                dom_url = LinkCleaner()._recursive_trim(dom_url)
+                try:
+                    url = LinkCleaner().single_clean_url(url)
+                    url = LinkCleaner().sanitize_url_prefix(url)
+                    dom_url = LinkCleaner().single_clean_url(dom_url)
+                    dom_url = LinkCleaner().sanitize_url_prefix(dom_url)
+                    url = url.split("#")[0]
+                    if url[-4] == "/amp": url = url[:-4]
+                    dom_url = dom_url.split("#")[0]
+                    if dom_url[-4] == "/amp": dom_url = dom_url[:-4]
+                    url = LinkCleaner()._recursive_trim(url)
+                    dom_url = LinkCleaner()._recursive_trim(dom_url)
+                except:
+                    pass
                 sim = Levenshtein.ratio(url, dom_url)
                 #if sim > 0.93 and sim < 1.0:
                 url_sims[real_test_url]={"sim_url":dom_url,"sim_score":sim}
 
-    if len(url_sims) == 1:
+    if len(url_sims) == 1 or len(urls) == 1:
         return dom_url,sim
     else:
         return url_sims
-
-
 
 def get_dom_sorted_urls(full=False):
 
     mdb = MongoSpread()
     dom_sorted_urls = {}
     if full:
-        org_urls = [d["Url"] for d in mdb.database["url"].find()][:10000]
+        org_urls = [d["Url"] for d in mdb.database["url"].find()]
         random.shuffle(org_urls)
         num_cores = 6
         pool = Pool(num_cores)
@@ -100,4 +101,4 @@ def search_urls():
 
     pass
 
-test()
+#test()

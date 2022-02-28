@@ -7,17 +7,10 @@ import pandas as pd
 import time
 import random
 import numpy as np
-from operator import itemgetter
 import sys
 import gc
 from multiprocessing import Pool, Manager
 import networkx as nx
-from collections import defaultdict
-from spreadAnalysis.io.config_io import Config
-import fasttext
-
-conf = Config()
-lang_model = fasttext.load_model(conf.LANGDETECT_MODEL)
 
 def bi_to_uni(data):
 
@@ -34,83 +27,14 @@ def bi_to_uni(data):
 						rep_data[(n1[0],n2[0])]=0
 	return rep_data
 
-def get_agg_actor_metrics(actors):
-
-	agg_data = {}
-	mdb = MongoSpread()
-	first_it = True
-	for actor in actors:
-		try:
-			actor_url_docs = mdb.database["url_bi_network"].find({"actor":actor},no_cursor_timeout=True).sort("actor_platform",-1)
-			for actor_url in actor_url_docs:
-				unique_actor = actor_url["actor_platform"]
-				if unique_actor not in agg_data or first_it:
-					if not first_it:
-
-						actor_data = {  "actor_name":prev_ua_doc["actor_label"],
-										"actor_unique":prev_ua_doc["actor_platform"],
-										"actor_username":prev_ua_doc["actor_username"],
-										"actor":actor,
-										"most_popular_url_shared":sorted(most_popular_url_shared.items(), key = itemgetter(1), reverse=True)[0][0],
-										"n_unique_domains_shared":len(unique_domains),
-										"most_often_shared_domain":max(most_often_shared_domain, key = most_often_shared_domain.count),
-										"n_posts":len(posts),
-										"lang":max(langs, key = langs.count),
-										"interactions_mean":np.nanmean(np.array(interactions,dtype=np.float)),
-										"interactions_std":np.nanstd(np.array(interactions,dtype=np.float)),
-										"message_length_mean":np.nanmean(np.array(text_lengths,dtype=np.float)),
-										"message_length_std":np.nanstd(np.array(text_lengths,dtype=np.float)),
-										"first_post_observed":min([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
-										"last_post_observed":max([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
-										"followers_mean":np.nanmean(np.array(followers,dtype=np.float)),
-										"followers_max":np.nanmax(np.array(followers,dtype=np.float)),
-										"platform":platform,
-										"account_type":account_type,
-										"account_category":account_category,
-										"link_to_actor":link_to_actor,
-										}
-
-						net_label_data = mdb.database["url_bi_network_coded"].find_one({"uentity":actor,"entity_type":"actor"})
-						if net_label_data is not None:
-							actor_data.update(dict(net_label_data["main_category"]))
-							actor_data["min_distance_to_0"]=net_label_data["distance_to_0"]
-						agg_data[prev_ua_doc["actor_platform"]]=actor_data
-					else:
-						pass
-
-					most_popular_url_shared = defaultdict(int)
-					unique_domains = set([])
-					most_often_shared_domain = []
-
-					posts = set([])
-					langs = []
-					interactions = []
-					text_lengths = []
-					post_dates = []
-					followers = []
-
-				most_popular_url_shared[actor_url["url"]]+=1
-				unique_domains.add(actor_url["domain"])
-				most_often_shared_domain.append(actor_url["domain"])
-				for pid in list(actor_url["message_ids"]):
-					posts.add(pid)
-					post_doc = mdb.database["post"].find_one({"message_id":pid})
-					langs.append(Spread._get_lang(data=post_doc,method=post_doc["method"],model=lang_model))
-					interactions.append(Spread._get_interactions(data=post_doc,method=post_doc["method"]))
-					text_lengths.append(len(Spread._get_message_text(data=post_doc,method=post_doc["method"])))
-					post_dates.append(Spread._get_date(data=post_doc,method=post_doc["method"]))
-					followers.append(Spread._get_followers(data=post_doc,method=post_doc["method"]))
-					platform = Spread._get_platform(data=post_doc,method=post_doc["method"])
-					account_type = Spread._get_account_type(data=post_doc,method=post_doc["method"])
-					account_category = Spread._get_account_category(data=post_doc,method=post_doc["method"])
-					link_to_actor = Spread._get_link_to_actor(data=post_doc,method=post_doc["method"])
-
-				prev_ua_doc = actor_url
-				first_it = False
-		except:
-			print ("CURSOR FAIL!")
-	mdb.close()
-	return agg_data
+	"""
+		net_cols = ["url","actor","weight"]
+		data = pd.DataFrame(list([vv for v in data.values() for vv in v]),columns=net_cols)
+		G_affil=nx.from_pandas_edgelist(data, 'actor', 'url', edge_attr='weight')
+		actors = data.drop_duplicates(subset=['actor'])
+		actors = actors['actor']
+		g = nx.bipartite.projected_graph(G_affil, actors, multigraph=False)
+	"""
 
 def filter_docs(args):
 
@@ -553,7 +477,7 @@ def stochastic_update_scheme_values(cat,batch_size=None):
 
 	mdb.close()
 
-def bi_to_uni_net(data,node0="actor",node1="url",build=True):
+def bi_to_uni_net(data,node0="actor",node1="url"):
 
 	def add_node_and_edges(g,node0,node1,weight):
 
@@ -586,40 +510,41 @@ def bi_to_uni_net(data,node0="actor",node1="url",build=True):
 	pool = Pool(num_cores)
 	rep_data = {}
 	results = pool.map(bi_to_uni,net_data)
+	del net_data
+	gc.collect()
 	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
-	if build:
-		start_time = time.time()
-		g = nx.Graph()
-		for result in results:
-			for k_tup, w in result.items():
-				g = add_node_and_edges(g,k_tup[0],k_tup[1],w)
-		print (len(g.nodes()))
-		print (len(g.edges()))
-		print("--- %s seconds --- to build network" % (time.time() - start_time))
-
-		return g
-	else:
-		edge_dict = {}
-		for result in results:
-			edge_dict.update(result)
-		return edge_dict
-
-def update_actor_data(actors=[],extra_data=None,extra_data_key="actor"):
-
-	mdb = MongoSpread()
-	num_cores = 12
-	pool = Pool(num_cores)
-	chunked_actors = hlp.chunks(actors,int(len(actors)/num_cores)+1)
-	results = pool.map(get_agg_actor_metrics,chunked_actors)
-	all_actor_data = []
+	start_time = time.time()
+	g = nx.Graph()
 	for result in results:
-		for uactor,doc in result.items():
-			if extra_data is not None and doc[extra_data_key] in extra_data:
-				doc.update(extra_data[doc[extra_data_key]])
-			all_actor_data.append(doc)
+		for k_tup, w in result.items():
+			g = add_node_and_edges(g,k_tup[0],k_tup[1],w)
+	print (len(g.nodes()))
+	print (len(g.edges()))
+	print("--- %s seconds --- to build network" % (time.time() - start_time))
 
-	all_actor_data = pd.DataFrame(all_actor_data)
-	return all_actor_data
+	return g
 
 if __name__ == "__main__":
-	sys.exit()
+
+	only_platforms = ["facebook","twitter","vkontakte","reddit","youtube",
+				"telegram","tiktok","gab","instagram","web"]
+
+	"""create_bi_ego_graph(actor_selection={"org_project_title":"altmed_denmark"},
+						selection_types=["actor"],actors=['Free Observer'],
+						between_dates={"start_date":"2021-08-01","end_date":"2022-01-01"},
+						only_platforms=only_platforms)"""
+	create_bi_ego_graph(url_selection={"Url" : {"$regex" : "freeobserver.org"}},
+						selection_types=["url","actor"],urls=[],
+						between_dates={"start_date":"2019-01-01","end_date":"2022-01-10"},
+						only_platforms=only_platforms,actors=['Free Observer'],actor_selection={"org_project_title":"altmed_denmark"})
+	"""create_bi_ego_graph(actor_selection={"org_project_title":"altmed_denmark","Iteration": { "$in": [0] }},
+						selection_types=["actor"],actors=[],
+						between_dates={"start_date":"2019-01-01","end_date":"2020-04-01"},
+						only_platforms=only_platforms)"""
+	"""create_bi_ego_graph(actor_selection={"org_project_title":"altmed_denmark","Iteration": { "$in": [0] }},
+						selection_types=["actor"],actors=["Arbejderen"],
+						between_dates={"start_date":"2020-01-01","end_date":"2021-01-01"},
+						only_platforms=only_platforms)"""
+	#create_bi_ego_graph(selection={"org_project_title":"altmed_denmark","Iteration": { "$in": [0] }},between_dates={"start_date":"2021-07-01","end_date":"2022-01-01"})
+	#get_actor_query_overlap()
+	#iteration_test()

@@ -33,12 +33,12 @@ class Teltest:
 
         conf = Config()
         tg = Telegram(conf.get_auth()["telegram"])
-        #print (tg.actor_content("https://t.me/alpenschau_aktuell"))
+        print (tg.actor_content("https://t.me/alpenschau_aktuell"))
 
         query = 'tjeneste'
-        data = tg.query_content(query,start_date="2021-12-01")
-        print (data)
-        print (len(data["output"]))
+        #data = tg.query_content(query,start_date="2021-12-01")
+        #print (data)
+        #print (len(data["output"]))
 
 def main():
     Teltest().run()

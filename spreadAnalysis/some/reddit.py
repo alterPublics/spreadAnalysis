@@ -47,6 +47,7 @@ class Reddit:
 		start_date, end_date = hlp.get_default_dates(start_date,end_date)
 		initial_results = 100
 		while initial_results >= 100:
+			if interval < 1: interval = 1
 			for sd,ed in hlp.create_date_ranges(start_date,end_date,interval=interval)[:1]:
 				dom_data = self.url_referals(domain,start_date=sd,end_date=ed)
 				initial_results = len(dom_data["output"])

@@ -197,8 +197,11 @@ class LinkUtils:
 	def extract_domain(self,url):
 
 		try:
-			domain = urlparse(url).netloc
-			domain = self.remove_url_prefix(domain)
+			if "http" in url:
+				domain = urlparse(url).netloc
+				domain = self.remove_url_prefix(domain)
+			else:
+				domain = url.replace("www.","")
 		except:
 			domain = url.split("/")[0]
 

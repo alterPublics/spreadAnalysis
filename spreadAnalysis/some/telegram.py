@@ -65,7 +65,7 @@ class Telegram:
                 "method":"telegram"}
         start_date, end_date = hlp.get_default_dates(start_date,end_date)
 
-        return self._get_data(data,start_date,end_date,from_username=actor,max_results=35000)
+        return self._get_data(data,start_date,end_date,from_username=actor,max_results=95000)
 
     def query_content(self,query,start_date=None,end_date=None):
 

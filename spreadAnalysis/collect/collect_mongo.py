@@ -282,7 +282,7 @@ class CollectMongo:
         platform_to_source = {d["platform_dest"]:d["platform_source"] for d in self.platform_info}
         if "Instagram" in platform_to_source: platform_to_source["Instagram"]="crowdtangle_insta"
 
-        for actor_doc in org_actors:
+        for actor_doc in list(org_actors):
             actor = actor_doc["Actor"]
             if actor in aliases:
                 for alias in aliases[actor]:
@@ -342,7 +342,6 @@ class CollectMongo:
                     {"url":org_url,"clean_url":cleaned_url})
             if cleaned_url is None:
                 continue
-
             resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("domain").items():
                 start_date, end_date = input_sd, input_ed
@@ -361,7 +360,6 @@ class CollectMongo:
                     except:
                         data = None
                     self.process_pull(org_url,method_name,"domain",docs,l_start_date,l_end_date)
-
                     if data is not None:
                         for url_doc in data:
                             prev_post_ids = self.save_data(self.mdb.database["post"],

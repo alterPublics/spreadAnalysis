@@ -608,8 +608,8 @@ class MongoSpread(MongoDatabase):
 def test():
 
 	m = MongoSpread()
-	#m.update_url_bi_network(new=False)
-	m.bi_to_uni_net("url","actor")
+	m.update_url_bi_network(new=False)
+	#m.bi_to_uni_net("url","actor")
 
 if __name__ == '__main__':
 	args = sys.argv
