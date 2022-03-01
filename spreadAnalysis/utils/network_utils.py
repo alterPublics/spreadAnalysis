@@ -3,6 +3,9 @@ import networkx as nx
 import math
 import numpy as np
 from operator import itemgetter
+from multiprocessing import Pool, Manager
+
+
 
 class NetworkUtils:
 
@@ -372,30 +375,6 @@ class NetworkUtils:
 		return g
 
 	@classmethod
-	def add_edge_percentage_bistepped(cls,g,att_name,origin_node_type,exclude_att_vals=None,keep_percent=True):
+	def add_affinity_scores(cls,g,actor_mapping):
 
-		att_vals = set([str(ndat[att_name]) for n,ndat in g.nodes(data=True) if ndat[att_name] is not None and len(str(ndat[att_name])) > 0 and str(ndat[att_name]) != "None"])
-		for att_val in att_vals:
-			g = cls.add_edge_percentage(g,att_name,att_val,exclude_att_vals=None)
-		for node,ndat in list(g.nodes(data=True)):
-			if ndat["node_type"]==origin_node_type:
-				for att_val in att_vals:
-					edge_weight_sum = 0.0
-					noi_weight_sum = 0.0
-					for org, edge, edat in g.edges(node,data=True):
-						noi_weight_sum+=float(edat["weight"])*g.nodes[edge][att_val+"_%"]
-						edge_weight_sum+=float(edat["weight"])
-					if edge_weight_sum > 0:
-						g.nodes[node][att_val+"_%"]=noi_weight_sum/edge_weight_sum
-					else:
-						g.nodes[node][att_val+"_%"]=np.nan
-		for node,ndat in list(g.nodes(data=True)):
-			if ndat[att_name] is None or len(str(ndat[att_name])) == 0 or str(ndat[att_name]) == "None":
-				vals = {att:val for att,val in dict(ndat).items() if att.replace("_%","") in att_vals}
-				if sum(list(vals.values())) > 0:
-					g.nodes[node][att_name]=sorted(vals.items(), key=itemgetter(1), reverse=True)[0][0].replace("_%","")
-		if not keep_percent:
-			for node in list(g.nodes()):
-				for att_val in att_vals:
-					del g.nodes[node][att_val+"_%"]
-		return g
+		

@@ -256,6 +256,11 @@ def find_actors(selection={},actors=[]):
 			actors = [d["Actor"] for d in cur]
 		return actors
 
+def multi_find_urls(org_urls):
+
+    prev_urls = set(find_urls(selection={},urls=org_urls))
+    return prev_urls
+
 def find_urls(selection={},urls=[]):
 
 	mdb = MongoSpread()
@@ -350,8 +355,9 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 				binet = add_data_to_net(fdocs,binet,{},"actor")
 	if "url" in selection_types:
 		print ("urls...")
-		urls = find_urls(selection=url_selection,urls=urls)
-		first_degree_urls.update(urls)
+		results = pool.map(multi_find_urls,[l for l in hlp.chunks(urls,int(len(urls)/num_cores)+1)])
+		for result in results:
+			first_degree_urls.update(result)
 	first_degree_urls.update(set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="url"]))
 	del actors
 	del urls
