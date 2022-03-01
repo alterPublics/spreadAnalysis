@@ -372,9 +372,9 @@ def scrape_majestic_ref_dlinks(domains,main_path):
     scrp.browser_init()
     #scrp.browser.get("https://majestic.com/account/login")
     time.sleep(1)
-    unique_doms = set([])
     all_doms = []
     for dom in domains:
+        unique_doms = set([])
         try:
             dom = LinkCleaner().extract_domain(dom)
             dom = LinkCleaner().remove_url_prefix(dom)

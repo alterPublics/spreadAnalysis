@@ -31,7 +31,7 @@ def bi_to_uni(data):
 					elif (n2[0],n1[0]) in rep_data:
 						rep_data[(n2[0],n1[0])]+=(n1[1]+n2[1])/2
 					else:
-						rep_data[(n1[0],n2[0])]=0
+						rep_data[(n1[0],n2[0])]=(n1[1]+n2[1])/2
 	return rep_data
 
 def get_agg_actor_metrics(actors):
@@ -553,7 +553,7 @@ def stochastic_update_scheme_values(cat,batch_size=None):
 
 	mdb.close()
 
-def bi_to_uni_net(data,node0="actor",node1="url",build=True):
+def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 
 	def add_node_and_edges(g,node0,node1,weight):
 
@@ -578,7 +578,6 @@ def bi_to_uni_net(data,node0="actor",node1="url",build=True):
 	del data
 	gc.collect()
 	start_time = time.time()
-	num_cores = 12
 	N = num_cores
 	S = int(len(net_data)/N)
 	net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores))
@@ -587,7 +586,7 @@ def bi_to_uni_net(data,node0="actor",node1="url",build=True):
 	rep_data = {}
 	results = pool.map(bi_to_uni,net_data)
 	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
-	if build:
+	if output == "net":
 		start_time = time.time()
 		g = nx.Graph()
 		for result in results:
@@ -598,6 +597,14 @@ def bi_to_uni_net(data,node0="actor",node1="url",build=True):
 		print("--- %s seconds --- to build network" % (time.time() - start_time))
 
 		return g
+	elif output == "pandas":
+		edge_list = []
+		for result in results:
+			for k_tup, w in result.items():
+				doc = {"src":str(k_tup[0]),"trg":str(k_tup[1]),"weight":w}
+				edge_list.append(doc)
+		edge_list = pd.DataFrame(edge_list)
+		return edge_list
 	else:
 		edge_dict = {}
 		for result in results:

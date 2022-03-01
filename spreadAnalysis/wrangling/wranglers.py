@@ -5,10 +5,41 @@ from spreadAnalysis.scraper.scraper import Scraper
 from spreadAnalysis.utils.pd_utils import *
 from spreadAnalysis.persistence.schemas import Spread
 from spreadAnalysis import _gvars as gvar
-
+import csv
 import pandas as pd
 import random
 import numpy as np
+
+def insert_fourchan_data(path_to_file):
+
+    cols = ["num", "subnum", "thread_num", "op",
+            "timestamp", "timestamp_expired",
+            "preview_orig", "preview_w", "preview_h",
+            "media_filename", "media_w", "media_h",
+            "media_size", "media_hash", "media_orig",
+            "spoiler", "deleted", "capcode", "email",
+            "name", "trip", "title", "comment", "sticky",
+            "locked", "poster_hash", "poster_country", "exif"]
+
+    row_count = 0
+    n_cols = len(cols)
+    with open(path_to_file,"r") as file_obj:
+        reader_obj = csv.reader(file_obj, delimiter=',', quotechar='"')
+        for line in reader_obj:
+            #row_count+=1
+            if len(line) == n_cols:
+                doc = {cols[r]:line[r] for r in range(n_cols)}
+            elif len(line) >= 23 and len(line) < n_cols:
+                doc = {cols[r]:line[r] for r in range(len(line))}
+            else:
+                continue
+            url = Spread._get_message_link(data=doc,method="fourchan")
+            if url is not None:
+                print (doc)
+                row_count+=1
+            if row_count > 10:
+
+                sys.exit()
 
 def delete_actor_source(main_path,actor=None,source=None,zero_hits=True):
 

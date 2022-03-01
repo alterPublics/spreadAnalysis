@@ -84,6 +84,9 @@ class Spread:
 			_val = str(data["desc"])
 		if method=="gab":
 			_val = str(data["body"])
+		if method=="fourchan":
+			#print (data)
+			_val = str(data["comment"])
 		return _val
 
 	@staticmethod
@@ -125,7 +128,10 @@ class Spread:
 			url_list = LinkCleaner().get_url_list_from_text(Spread._get_message_text(data=data,method=method))
 			if len(url_list) > 0:
 				_val = url_list[0]
-
+		if method=="fourchan":
+			url_list = LinkCleaner().get_url_list_from_text(Spread._get_message_text(data=data,method=method))
+			if len(url_list) > 0:
+				_val = url_list[0]
 		return _val
 
 	@staticmethod
