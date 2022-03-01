@@ -377,4 +377,4 @@ class NetworkUtils:
 	@classmethod
 	def add_affinity_scores(cls,g,actor_mapping):
 
-		
+		pass
