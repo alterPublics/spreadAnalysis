@@ -17,6 +17,7 @@ from spreadAnalysis.scraper.scraper import Scraper
 from datetime import datetime, timedelta
 import sys
 from newspaper import Article
+import time
 
 class CollectMongo:
 
@@ -31,7 +32,7 @@ class CollectMongo:
                     "reddit":Reddit,
                     "gab":Gab}
 
-    def __init__(self,main_path,low_memory=True):
+    def __init__(self,main_path,low_memory=True,fail_wait_time=0):
 
         self.main_path = main_path
         self.low_memory = low_memory
@@ -40,6 +41,7 @@ class CollectMongo:
         self.MAX_DATE_RANGE_INTERVAL = 60
         self.MIN_DATE_RANGE_INTERVAL = 3
         self.DATE_RANGE_CONV = 3
+        self.fail_wait_time = fail_wait_time
 
     def unpack_output_docs(self,data):
 
@@ -359,6 +361,7 @@ class CollectMongo:
                         docs = self.unpack_output_docs(data)
                     except:
                         data = None
+                        time.sleep(self.fail_wait_time)
                     self.process_pull(org_url,method_name,"domain",docs,l_start_date,l_end_date)
                     if data is not None:
                         for url_doc in data:

@@ -27,11 +27,11 @@ def bi_to_uni(data):
 			for n2 in v:
 				if n1[0] != n2[0]:
 					if (n1[0],n2[0]) in rep_data:
-						rep_data[(n1[0],n2[0])]+=(n1[1]+n2[1])/2
+						rep_data[(n1[0],n2[0])]+=n1[1]
 					elif (n2[0],n1[0]) in rep_data:
-						rep_data[(n2[0],n1[0])]+=(n1[1]+n2[1])/2
+						rep_data[(n2[0],n1[0])]+=n2[1]
 					else:
-						rep_data[(n1[0],n2[0])]=(n1[1]+n2[1])/2
+						rep_data[(n1[0],n2[0])]=n1[1]
 	return rep_data
 
 def get_agg_actor_metrics(actors):
@@ -303,7 +303,7 @@ def iteration_test():
 		if count % 100000 == 0:
 			print("--- {0} seconds --- total for {1}".format((time.time() - start_time),str(count)))
 
-def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test"):
+def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12):
 
 	def add_data_to_net(docs,binet,has_been_queried,org_type):
 
@@ -320,7 +320,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 
 	mdb = MongoSpread()
 	net_db = mdb.database["url_bi_network"]
-	num_cores = 12
 	pool = Pool(num_cores)
 	has_been_queried = set([])
 	binet = BipartiteNet(title,{})
@@ -519,10 +518,9 @@ def propagate_scheme_values(cat,max_steps=20,low_memory=False,start_step=0):
 				del all_write_docs
 				gc.collect()
 
-def stochastic_update_scheme_values(cat,batch_size=None):
+def stochastic_update_scheme_values(cat,batch_size=None,num_cores=12):
 
 	mdb = MongoSpread()
-	num_cores = 8
 	inner_batch_size = 5000*num_cores
 	pool = Pool(num_cores)
 	full_count = 0
