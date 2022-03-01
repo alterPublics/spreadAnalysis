@@ -16,8 +16,11 @@ from collections import defaultdict
 from spreadAnalysis.io.config_io import Config
 import fasttext
 
-conf = Config()
-lang_model = fasttext.load_model(conf.LANGDETECT_MODEL)
+try:
+	conf = Config()
+	lang_model = fasttext.load_model(conf.LANGDETECT_MODEL)
+except:
+	pass
 
 def bi_to_uni(data):
 
