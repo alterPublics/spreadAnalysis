@@ -363,9 +363,9 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			urls = find_urls(selection=url_selection,urls=urls)
 			first_degree_urls.update(urls)
 	first_degree_urls.update(set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="url"]))
-	del actors
-	del urls
-	del results
+	#del actors
+	#del urls
+	#del results
 	gc.collect()
 
 	print ("building first degree connections.")
