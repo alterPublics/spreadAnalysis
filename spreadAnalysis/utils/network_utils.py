@@ -405,10 +405,8 @@ class NetworkUtils:
 		node_atts = {n:{ua:0.0 for ua in unique_atts} for n in g.nodes()}
 		diam = float(nx.diameter(g))-1.0
 		for n in list(g.nodes()):
-			if n in actor_mapping
+			if n in actor_mapping:
 				node_atts[n][actor_mapping[n]]=1.0
 				node_atts["dist_to_0"]=0.0
 			else:
 				node_atts["dist_to_0"]=diam
-
-		
