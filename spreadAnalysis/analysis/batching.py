@@ -355,9 +355,13 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 				binet = add_data_to_net(fdocs,binet,{},"actor")
 	if "url" in selection_types:
 		print ("urls...")
-		results = pool.map(multi_find_urls,[l for l in hlp.chunks(urls,int(len(urls)/num_cores)+1)])
-		for result in results:
-			first_degree_urls.update(result)
+		if len(urls) > 0 and len(url_selection) == 0:
+			results = pool.map(multi_find_urls,[l for l in hlp.chunks(urls,int(len(urls)/num_cores)+1)])
+			for result in results:
+				first_degree_urls.update(result)
+		else:
+			urls = find_urls(url_selection=url_selection,urls=urls)
+			first_degree_urls.update(urls)
 	first_degree_urls.update(set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="url"]))
 	del actors
 	del urls
@@ -389,7 +393,8 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 
 	print ("searching for second degree interconnections.")
 	fucount = 0
-	for _factor_chunk in hlp.chunks(list(second_degree_actors),int(len(list(second_degree_actors))/num_cores)+1):
+	fchunks_size = 2
+	for _factor_chunk in hlp.chunks(list(second_degree_actors),int(len(list(second_degree_actors))/fchunks_size)+1):
 		second_degree_queries = []
 		for _factor in _factor_chunk:
 			fucount+=1

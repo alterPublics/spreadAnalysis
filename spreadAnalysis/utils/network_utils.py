@@ -4,6 +4,27 @@ import math
 import numpy as np
 from operator import itemgetter
 from multiprocessing import Pool, Manager
+import random
+
+def set_neighbour_affinity(args):
+
+	new_node_atts = {}
+	node_edges = args[0]
+	node_atts = args[1]
+	unique_atts = args[2]
+	for edges in node_edges:
+		n_edges = 0
+		new_atts = {a:0.0 for a in unique_atts}
+		avg_dists = []
+		for org,edg,w in edges:
+			avg_dists.append(node_atts[edg]["dist_to_0"]+1.0)
+			for att in unique_atts:
+				new_atts[att]+=np.log(w+2)*node_atts[edg][att]*(node_atts[edg]["dist_to_0"]+1)**-1
+		atts_sum = float(np.sum(np.array(list(new_atts.values()))))
+		if atts_sum > 0:
+			new_atts = {a:float(v)/atts_sum for a,v in list(new_atts.items())}
+		new_atts["dist_to_0"]=float(np.mean(np.array(avg_dists)))
+	return new_node_atts
 
 
 
@@ -375,6 +396,19 @@ class NetworkUtils:
 		return g
 
 	@classmethod
-	def add_affinity_scores(cls,g,actor_mapping):
+	def add_affinity_scores(cls,g,actor_mapping,num_cores=12):
 
-		pass
+		n_actors = len(actor_mapping)
+		not_mapped_actors = [a for a in g.nodes() if a not in actor_mapping]
+		actor_mapping.update( {a:"grey" for a in random.sample(not_mapped_actors,n_actors)} )
+		unique_atts = set([v for k,v in actor_mapping.items()])
+		node_atts = {n:{ua:0.0 for ua in unique_atts} for n in g.nodes()}
+		diam = float(nx.diameter(g))-1.0
+		for n in list(g.nodes()):
+			if n in actor_mapping
+				node_atts[n][actor_mapping[n]]=1.0
+				node_atts["dist_to_0"]=0.0
+			else:
+				node_atts["dist_to_0"]=diam
+
+		
