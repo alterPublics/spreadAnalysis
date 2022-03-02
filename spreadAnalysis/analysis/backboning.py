@@ -6,6 +6,7 @@ from collections import defaultdict
 from scipy.stats import binom
 from pandas_multiprocess import multi_process
 from multiprocesspandas import applyparallel
+from multiprocessing import Pool, Manager
 
 def read(filename, column_of_interest, triangular_input = False, consider_self_loops = True, undirected = False, drop_zeroes = True, sep = ","):
 	"""Reads a field separated input file into the internal backboning format (a Pandas Dataframe).
@@ -108,7 +109,7 @@ def test_densities(table, start, end, step):
 		avgdeg = (2.0 * edges) / nodes
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
-def noise_corrected_OLD(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
@@ -119,12 +120,9 @@ def noise_corrected_OLD(table, undirected = False, return_self_loops = False, ca
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
 	table["n.."] = table["nij"].sum()
-	table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
-	#table["mean_prior_probability"] = table.apply_parallel(_mean_prior_prob, num_processes=num_cores, axis=0)
-	if calculate_p_value:
-		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
-		return table[["src", "trg", "nij", "score"]]
-	table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
+	#table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+	table = _multi_funcs(table,[_mean_prior_prob,_kappa],["mean_prior_probability","kappa"])
 	table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
 	table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
 	table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
@@ -142,7 +140,20 @@ def noise_corrected_OLD(table, undirected = False, return_self_loops = False, ca
 		table = table[table["src"] <= table["trg"]]
 	return table[["src", "trg", "nij", "score", "sdev_cij"]]
 
-def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+def _multi_get_result(args)
+
+	df = args[0]
+	func = args[1]
+	return func(df)
+
+def _multi_funcs(df,vars,funcs):
+
+	results = Pool(len(vars)).map(_multi_get_result,[(df,func) for func in funcs])
+	for var,result in zip(vars,results)
+		df[var]=func(df)
+	return df
+
+def noise_corrected_NEW2(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
