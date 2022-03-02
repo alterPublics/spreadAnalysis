@@ -26,8 +26,6 @@ def set_neighbour_affinity(args):
 		new_atts["dist_to_0"]=float(np.mean(np.array(avg_dists)))
 	return new_node_atts
 
-
-
 class NetworkUtils:
 
 	@classmethod

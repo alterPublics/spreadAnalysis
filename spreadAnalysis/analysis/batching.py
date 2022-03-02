@@ -611,11 +611,13 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 		return g
 	elif output == "pandas":
 		edge_list = []
+		edge_df = pd.DataFrame(index=False)
 		for result in results:
 			for k_tup, w in result.items():
 				doc = {"src":str(k_tup[0]),"trg":str(k_tup[1]),"weight":w}
 				edge_list.append(doc)
-		edge_list = pd.DataFrame(edge_list)
+			edge_df = pd.concat([edge_df,pd.DataFrame(edge_list,index=False)], axis=0)
+			edge_list = []
 		return edge_list
 	else:
 		edge_dict = {}
