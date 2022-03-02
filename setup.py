@@ -62,7 +62,8 @@ def setup_package(pkg_name):
             'hdbscan',
             'garc',
             'newspaper3k',
-            'networkit'
+            'networkit',
+            'pandas-multiprocess'
         ],
         python_requires='>=3.8',
         )

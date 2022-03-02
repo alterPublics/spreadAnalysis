@@ -4,6 +4,7 @@ import pandas as pd
 import networkx as nx
 from collections import defaultdict
 from scipy.stats import binom
+from pandas_multiprocess import multi_process
 
 def read(filename, column_of_interest, triangular_input = False, consider_self_loops = True, undirected = False, drop_zeroes = True, sep = ","):
 	"""Reads a field separated input file into the internal backboning format (a Pandas Dataframe).
@@ -106,7 +107,7 @@ def test_densities(table, start, end, step):
 		avgdeg = (2.0 * edges) / nodes
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
-def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False):
+def noise_corrected_OLD(table, undirected = False, return_self_loops = False, calculate_p_value = False):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
@@ -116,6 +117,42 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
 	table["n.."] = table["nij"].sum()
 	table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
+	if calculate_p_value:
+		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
+		return table[["src", "trg", "nij", "score"]]
+	table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+	table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
+	table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
+	table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
+	table["beta_prior"] = (table["mean_prior_probability"] / table["var_prior_probability"]) * (1 - (table["mean_prior_probability"] ** 2)) - (1 - table["mean_prior_probability"])
+	table["alpha_post"] = table["alpha_prior"] + table["nij"]
+	table["beta_post"] = table["n.."] - table["nij"] + table["beta_prior"]
+	table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
+	table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
+	table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
+	table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
+	table["sdev_cij"] = table["variance_cij"] ** .5
+	if not return_self_loops:
+		table = table[table["src"] != table["trg"]]
+	if undirected:
+		table = table[table["src"] <= table["trg"]]
+	return table[["src", "trg", "nij", "score", "sdev_cij"]]
+
+def _mean_prior_prob(data_row):
+
+	data_row["mean_prior_probability"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+
+def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+	sys.stderr.write("Calculating NC score...\n")
+	#table = table.copy()
+	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+	src_sum = table.groupby(by = "src").sum()[["nij"]]
+	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
+	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
+	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
+	table["n.."] = table["nij"].sum()
+	table = multi_process(func=func,data=df,num_process=num_cores)
+	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 	if calculate_p_value:
 		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
 		return table[["src", "trg", "nij", "score"]]
