@@ -587,11 +587,11 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 		for n,nd in list(data.nodes(data=True)):
 			if nd["node_type"]==node1:
 				net_data[n]=[]
-				if n not in node_key_map:
-					node_key_map[n]=node_counter
-					node_counter+=1
 				for on,e,ed in list(data.edges(n,data=True)):
-					net_data[n].append([e,ed["weight"]])
+					if e not in node_key_map:
+						node_key_map[e]=node_counter
+						node_counter+=1
+					net_data[n].append([node_key_map[e],ed["weight"]])
 	del data
 	gc.collect()
 	start_time = time.time()
@@ -606,15 +606,7 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 	edge_dict = {}
 	for result in results:
 		for k_tup, w in result.items():
-			e1 = str(k_tup[0])
-			e2 = str(k_tup[1])
-			if e1 not in node_key_map:
-				node_key_map[e1]=node_counter
-				node_counter+=1
-			if e2 not in node_key_map:
-				node_key_map[e2]=node_counter
-				node_counter+=1
-			edge_tup = (node_key_map[e1],node_key_map[e2])
+			edge_tup = (k_tup[0],k_tup[1])
 			if edge_tup in edge_dict:
 				edge_dict[edge_tup]+=w
 			else:
