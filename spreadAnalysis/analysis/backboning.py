@@ -110,11 +110,10 @@ def test_densities(table, start, end, step):
 def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False):
 	sys.stderr.write("Calculating NC score...\n")
 	table = table.copy()
-	src_sum = table.groupby(by = "src").sum()[["nij"]]
-	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
-	print (table)
 	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
+	src_sum = table.groupby(by = "src").sum()[["nij"]]
+	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
 	table["n.."] = table["nij"].sum()
 	table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
