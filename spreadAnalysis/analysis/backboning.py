@@ -140,7 +140,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 		table = table[table["src"] <= table["trg"]]
 	return table[["src", "trg", "nij", "score", "sdev_cij"]]
 
-def _multi_get_result(args)
+def _multi_get_result(args):
 
 	df = args[0]
 	func = args[1]
