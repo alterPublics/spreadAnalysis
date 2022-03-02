@@ -144,8 +144,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 
 def _mean_prior_prob(data_row):
 
-	data_row["mean_prior_probability"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
-	return data_row
+	return ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
 
 def _kappa(data_row):
 
