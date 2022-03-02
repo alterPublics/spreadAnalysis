@@ -149,7 +149,7 @@ def _multi_get_result(args):
 def _multi_funcs(df,vars,funcs):
 
 	results = Pool(len(vars)).map(_multi_get_result,[(df,func) for func in funcs])
-	for var,result in zip(vars,results)
+	for var,result in zip(vars,results):
 		df[var]=func(df)
 	return df
 
