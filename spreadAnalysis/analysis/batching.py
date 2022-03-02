@@ -618,7 +618,8 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 				edge_list.append([str(k_tup[0]),str(k_tup[1]),w])
 			edge_df = pd.concat([edge_df,pd.DataFrame(edge_list,columns=cols)], axis=0)
 			edge_list = []
-		return edge_list
+		print (edge_df)
+		return edge_df
 	else:
 		edge_dict = {}
 		for result in results:
