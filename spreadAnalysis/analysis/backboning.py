@@ -152,9 +152,8 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
 	table["n.."] = table["nij"].sum()
-	table["mean_prior_probability"] = table.apply(_mean_prior_prob, axis=1)["mean_prior_probability"]
-	print (table)
-	#table = multi_process(func=_mean_prior_prob,data=table,num_process=num_cores,verbose=False)
+	#table["mean_prior_probability"] = table.apply(_mean_prior_prob, axis=1)["mean_prior_probability"]
+	table["mean_prior_probability"] = multi_process(func=_mean_prior_prob,data=table,num_process=num_cores,verbose=False)["mean_prior_probability"]
 	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 	if calculate_p_value:
 		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
