@@ -141,6 +141,7 @@ def noise_corrected_OLD(table, undirected = False, return_self_loops = False, ca
 def _mean_prior_prob(data_row):
 
 	data_row["mean_prior_probability"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	return data_row
 
 def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
