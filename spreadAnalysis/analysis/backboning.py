@@ -122,7 +122,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table["n.."] = table["nij"].sum()
 	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 	#table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
-	table = _multi_funcs(table,[_mean_prior_prob,_kappa],["mean_prior_probability","kappa"])
+	table = _multi_funcs(table,["mean_prior_probability","kappa"],[_mean_prior_prob,_kappa])
 	table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
 	table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
 	table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
