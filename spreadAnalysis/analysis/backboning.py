@@ -108,7 +108,7 @@ def test_densities(table, start, end, step):
 		avgdeg = (2.0 * edges) / nodes
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
-def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+def noise_corrected_OLD(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
@@ -142,69 +142,90 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 		table = table[table["src"] <= table["trg"]]
 	return table[["src", "trg", "nij", "score", "sdev_cij"]]
 
+def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+	sys.stderr.write("Calculating NC score...\n")
+	#table = table.copy()
+	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
+	#src_sum = table.groupby(["src"]).apply_parallel(_by_sum, num_processes=num_cores)
+	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+	src_sum = table.groupby(by = "src").sum()[["nij"]]
+	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
+	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
+	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
+	table["n.."] = table["nij"].sum()
+	table["mean_prior_probability"] = table.apply_parallel(_mean_prior_prob, num_processes=num_cores, axis=0)
+	if calculate_p_value:
+		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
+		return table[["src", "trg", "nij", "score"]]
+	table["kappa"]  = table.apply_parallel(_kappa, num_processes=num_cores, axis=0)
+	table["score"]  = table.apply_parallel(_score, num_processes=num_cores, axis=0)
+	table["var_prior_probability"]  = table.apply_parallel(_var_prior_probability, num_processes=num_cores, axis=0)
+	table["alpha_prior"]  = table.apply_parallel(_alpha_prior, num_processes=num_cores, axis=0)
+	table["beta_prior"]  = table.apply_parallel(_beta_prior, num_processes=num_cores, axis=0)
+	table["alpha_post"]  = table.apply_parallel(_alpha_post, num_processes=num_cores, axis=0)
+	table["beta_post"] = table.apply_parallel(_beta_post, num_processes=num_cores, axis=0)
+	table["expected_pij"]  = table.apply_parallel(_expected_pij, num_processes=num_cores, axis=0)
+	table["variance_nij"]  = table.apply_parallel(_variance_nij, num_processes=num_cores, axis=0)
+	table["d"] = table.apply_parallel(_d, num_processes=num_cores, axis=0)
+	table["variance_cij"]  = table.apply_parallel(_variance_cij, num_processes=num_cores, axis=0)
+	table["sdev_cij"]  = table.apply_parallel(_sdev_cij, num_processes=num_cores, axis=0)
+	if not return_self_loops:
+		table = table[table["src"] != table["trg"]]
+	if undirected:
+		table = table[table["src"] <= table["trg"]]
+	return table[["src", "trg", "nij", "score", "sdev_cij"]]
+
 def _mean_prior_prob(data_row):
 
 	return ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
 
 def _kappa(data_row):
 
-	data_row["kappa"] = data_row["n.."] / (data_row["ni."] * data_row["n.j"])
-	return data_row
+	return data_row["n.."] / (data_row["ni."] * data_row["n.j"])
 
 def _score(data_row):
 
-	data_row["score"] = ((data_row["kappa"] * data_row["nij"]) - 1) / ((data_row["kappa"] * data_row["nij"]) + 1)
-	return data_row
+	return ((data_row["kappa"] * data_row["nij"]) - 1) / ((data_row["kappa"] * data_row["nij"]) + 1)
 
 def _var_prior_probability(data_row):
 
-	data_row["var_prior_probability"] = (1 / (data_row["n.."] ** 2)) * (data_row["ni."] * data_row["n.j"] * (data_row["n.."] - data_row["ni."]) * (data_row["n.."] - data_row["n.j"])) / ((data_row["n.."] ** 2) * ((data_row["n.."] - 1)))
-	return data_row
+	return (1 / (data_row["n.."] ** 2)) * (data_row["ni."] * data_row["n.j"] * (data_row["n.."] - data_row["ni."]) * (data_row["n.."] - data_row["n.j"])) / ((data_row["n.."] ** 2) * ((data_row["n.."] - 1)))
 
 def _alpha_prior(data_row):
 
-	data_row["alpha_prior"] = (((data_row["mean_prior_probability"] ** 2) / data_row["var_prior_probability"]) * (1 - data_row["mean_prior_probability"])) - data_row["mean_prior_probability"]
-	return data_row
+	return (((data_row["mean_prior_probability"] ** 2) / data_row["var_prior_probability"]) * (1 - data_row["mean_prior_probability"])) - data_row["mean_prior_probability"]
 
 def _beta_prior(data_row):
 
-	data_row["beta_prior"] = (data_row["mean_prior_probability"] / data_row["var_prior_probability"]) * (1 - (data_row["mean_prior_probability"] ** 2)) - (1 - data_row["mean_prior_probability"])
-	return data_row
+	return = (data_row["mean_prior_probability"] / data_row["var_prior_probability"]) * (1 - (data_row["mean_prior_probability"] ** 2)) - (1 - data_row["mean_prior_probability"])
 
 def _alpha_post(data_row):
 
-	data_row["alpha_post"] = data_row["alpha_prior"] + data_row["nij"]
-	return data_row
+	return data_row["alpha_prior"] + data_row["nij"]
 
 def _beta_post(data_row):
 
-	data_row["beta_post"] = data_row["n.."] - data_row["nij"] + data_row["beta_prior"]
-	return data_row
+	return data_row["n.."] - data_row["nij"] + data_row["beta_prior"]
 
 def _expected_pij(data_row):
 
-	data_row["expected_pij"] = data_row["alpha_post"] / (data_row["alpha_post"] + data_row["beta_post"])
-	return data_row
+	return data_row["alpha_post"] / (data_row["alpha_post"] + data_row["beta_post"])
 
 def _variance_nij(data_row):
 
-	data_row["variance_nij"] = data_row["expected_pij"] * (1 - data_row["expected_pij"]) * data_row["n.."]
-	return data_row
+	return data_row["expected_pij"] * (1 - data_row["expected_pij"]) * data_row["n.."]
 
 def _d(data_row):
 
-	data_row["d"] = (1.0 / (data_row["ni."] * data_row["n.j"])) - (data_row["n.."] * ((data_row["ni."] + data_row["n.j"]) / ((data_row["ni."] * data_row["n.j"]) ** 2)))
-	return data_row
+	return (1.0 / (data_row["ni."] * data_row["n.j"])) - (data_row["n.."] * ((data_row["ni."] + data_row["n.j"]) / ((data_row["ni."] * data_row["n.j"]) ** 2)))
 
 def _variance_cij(data_row):
 
-	data_row["variance_cij"] = data_row["variance_nij"] * (((2 * (data_row["kappa"] + (data_row["nij"] * data_row["d"]))) / (((data_row["kappa"] * data_row["nij"]) + 1) ** 2)) ** 2)
-	return data_row
+	return data_row["variance_nij"] * (((2 * (data_row["kappa"] + (data_row["nij"] * data_row["d"]))) / (((data_row["kappa"] * data_row["nij"]) + 1) ** 2)) ** 2)
 
 def _sdev_cij(data_row):
 
-	data_row["sdev_cij"] = data_row["variance_cij"] ** .5
-	return data_row
+	return data_row["variance_cij"] ** .5
 
 def _by_sum(df):
 	return pd.Series([df['nij'].sum()])
