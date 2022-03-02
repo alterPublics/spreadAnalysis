@@ -164,7 +164,7 @@ def _multi_get_group(args):
 def _multi_group_by(df,bys,ss):
 
 	results = Pool(len(bys)).map(_multi_get_group,[(by,ss,df) for by in bys])
-	return *[r for r in results]
+	return [r for r in results]
 
 def noise_corrected_NEW2(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
