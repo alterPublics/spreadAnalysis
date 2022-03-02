@@ -593,13 +593,32 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 	N = num_cores
 	S = int(len(net_data)/N)
 	net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores))
-	#net_data = [ net_data.iloc[i*S:(i+1)*S] for i in range(N) ]
 	pool = Pool(num_cores)
 	rep_data = {}
 	results = pool.map(bi_to_uni,net_data)
 	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
+	start_time = time.time()
+	edge_dict = {}
+	node_key_map = {}
+	node_counter = 0
+	for result in results:
+		for k_tup, w in result.items():
+			e1 = str(k_tup[0])
+			e2 = str(k_tup[1])
+			if e1 not in node_key_map:
+				node_key_map[e1]=node_counter
+				node_counter+=1
+			if e2 not in node_key_map:
+				node_key_map[e2]=node_counter
+				node_counter+=1
+			edge_tup = (node_key_map[e1],node_key_map[e2])
+			if edge_tup in edge_dict:
+				edge_dict[edge_tup]+=w
+			else:
+				edge_dict[edge_tup]=w
+	print("--- %s seconds --- for to tabulate data" % (time.time() - start_time))
+	start_time = time.time()
 	if output == "net":
-		start_time = time.time()
 		g = nx.Graph()
 		for result in results:
 			for k_tup, w in result.items():
@@ -607,33 +626,18 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 		print (len(g.nodes()))
 		print (len(g.edges()))
 		print("--- %s seconds --- to build network" % (time.time() - start_time))
-
-		return g
+		return g,node_key_map
 	elif output == "pandas":
 		edge_list = []
-		node_key_map = {}
-		node_counter = 0
 		cols = ["src","trg","weight"]
-		edge_df = pd.DataFrame(columns=cols)
-		for result in results:
-			for k_tup, w in result.items():
-				e1 = str(k_tup[0])
-				e2 = str(k_tup[1])
-				if e1 not in node_key_map:
-					node_key_map[e1]=node_counter
-					node_counter+=1
-				if e2 not in node_key_map:
-					node_key_map[e2]=node_counter
-					node_counter+=1
-				edge_list.append([int(node_key_map[e1]),int(node_key_map[e2]),float(w)])
-			edge_df = pd.concat([edge_df,pd.DataFrame(edge_list,columns=cols)], axis=0)
-			edge_list = []
+		for k_tup, w in edge_dict.items():
+			edge_list.append([k_tup[0],k_tup[1],float(w)])
+		edge_df = pd.DataFrame(edge_list, columns=cols)
+		print("--- %s seconds --- to build network" % (time.time() - start_time))
 		return edge_df, node_key_map
 	else:
-		edge_dict = {}
-		for result in results:
-			edge_dict.update(result)
-		return edge_dict
+		print("--- %s seconds --- to build network" % (time.time() - start_time))
+		return edge_dict,node_key_map
 
 def update_actor_data(actors=[],extra_data=None,extra_data_key="actor"):
 
