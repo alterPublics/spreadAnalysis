@@ -111,7 +111,7 @@ def test_densities(table, start, end, step):
 def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
-	trg_sum = table.groupby(by = "trg").apply_parallel(_by_sum, num_processes=num_cores)
+	trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
 	src_sum = table.groupby(by = "src").apply_parallel(_by_sum, num_processes=num_cores)
 	#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
 	#src_sum = table.groupby(by = "src").sum()[["nij"]]
@@ -207,7 +207,6 @@ def _sdev_cij(data_row):
 	return data_row
 
 def _by_sum(df):
-	import pandas as pd
 	return pd.Series([df['nij'].sum()])
 
 def noise_corrected_NEW(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
