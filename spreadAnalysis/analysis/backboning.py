@@ -112,6 +112,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table = table.copy()
 	src_sum = table.groupby(by = "src").sum()[["nij"]]
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
+	print (table)
 	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
