@@ -124,16 +124,12 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 	#table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
 	table = _multi_funcs(table,["mean_prior_probability","kappa"],[_mean_prior_prob,_kappa])
-	table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
-	table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
-	table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
-	table["beta_prior"] = (table["mean_prior_probability"] / table["var_prior_probability"]) * (1 - (table["mean_prior_probability"] ** 2)) - (1 - table["mean_prior_probability"])
-	table["alpha_post"] = table["alpha_prior"] + table["nij"]
-	table["beta_post"] = table["n.."] - table["nij"] + table["beta_prior"]
+	table = _multi_funcs(table,["score","var_prior_probability"],[_score,_var_prior_probability])
+	table = _multi_funcs(table,["alpha_prior","beta_prior"],[_alpha_prior,_beta_prior])
+	table = _multi_funcs(table,["alpha_post","beta_post"],[_alpha_post,_beta_post])
 	table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
 	table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
-	table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
-	table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
+	table = _multi_funcs(table,["d","variance_cij"],[_d,_variance_cij])
 	table["sdev_cij"] = table["variance_cij"] ** .5
 	if not return_self_loops:
 		table = table[table["src"] != table["trg"]]
