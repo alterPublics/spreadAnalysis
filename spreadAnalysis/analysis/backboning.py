@@ -114,8 +114,9 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	#table = table.copy()
 	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
 	#src_sum = table.groupby(["src"]).apply_parallel(_by_sum, num_processes=num_cores)
-	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
-	src_sum = table.groupby(by = "src").sum()[["nij"]]
+	#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+	#src_sum = table.groupby(by = "src").sum()[["nij"]]
+	trg_sum, src_sum = _multi_group_by(table,["trg","src"],"nij")
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
@@ -152,6 +153,18 @@ def _multi_funcs(df,vars,funcs):
 	for var,result in zip(vars,results):
 		df[var]=result
 	return df
+
+def _multi_get_group(args):
+
+	by = args[0]
+	s = args[1]
+	df = args[2]
+	return df.groupby(by = by).sum()[[s]]
+
+def _multi_group_by(df,bys,ss):
+
+	results = Pool(len(bys)).map(_multi_get_group,[(by,ss,df) for by in bys])
+	return *[r for r in results]
 
 def noise_corrected_NEW2(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
