@@ -582,9 +582,14 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 
 	net_data = {}
 	if isinstance(data,nx.Graph):
+		node_key_map = {}
+		node_counter = 0
 		for n,nd in list(data.nodes(data=True)):
 			if nd["node_type"]==node1:
 				net_data[n]=[]
+				if n not in node_key_map:
+					node_key_map[n]=node_counter
+					node_counter+=1
 				for on,e,ed in list(data.edges(n,data=True)):
 					net_data[n].append([e,ed["weight"]])
 	del data
@@ -599,8 +604,6 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
 	start_time = time.time()
 	edge_dict = {}
-	node_key_map = {}
-	node_counter = 0
 	for result in results:
 		for k_tup, w in result.items():
 			e1 = str(k_tup[0])

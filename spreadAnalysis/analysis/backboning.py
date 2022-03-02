@@ -5,6 +5,7 @@ import networkx as nx
 from collections import defaultdict
 from scipy.stats import binom
 from pandas_multiprocess import multi_process
+from multiprocesspandas import applyparallel
 
 def read(filename, column_of_interest, triangular_input = False, consider_self_loops = True, undirected = False, drop_zeroes = True, sep = ","):
 	"""Reads a field separated input file into the internal backboning format (a Pandas Dataframe).
@@ -107,11 +108,13 @@ def test_densities(table, start, end, step):
 		avgdeg = (2.0 * edges) / nodes
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
-def noise_corrected_OLD(table, undirected = False, return_self_loops = False, calculate_p_value = False):
+def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
-	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
-	src_sum = table.groupby(by = "src").sum()[["nij"]]
+	trg_sum = table.groupby(by = "trg").apply_parallel(_by_sum, num_processes=num_cores)
+	src_sum = table.groupby(by = "src").apply_parallel(_by_sum, num_processes=num_cores)
+	#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+	#src_sum = table.groupby(by = "src").sum()[["nij"]]
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
@@ -203,11 +206,16 @@ def _sdev_cij(data_row):
 	data_row["sdev_cij"] = data_row["variance_cij"] ** .5
 	return data_row
 
-def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
+def _by_sum(df):
+	import pandas as pd
+	return pd.Series([df['nij'].sum()])
+
+def noise_corrected_NEW(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
-	trg_sum = table.groupby(by = "trg").sum()[["nij"]]
-	src_sum = table.groupby(by = "src").sum()[["nij"]]
+
+	trg_sum = table.groupby(by = "trg").apply_parallel(_by_sum, num_processes=num_cores)
+	src_sum = table.groupby(by = "src").apply_parallel(_by_sum, num_processes=num_cores)
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
