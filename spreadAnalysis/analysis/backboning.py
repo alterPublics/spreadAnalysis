@@ -158,6 +158,11 @@ def _var_prior_probability(data_row):
 	data_row["var_prior_probability"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
 	return data_row
 
+def _alpha_prior(data_row):
+
+	data_row["alpha_prior"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	return data_row
+
 def _beta_prior(data_row):
 
 	data_row["beta_prior"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
