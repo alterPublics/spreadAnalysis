@@ -623,7 +623,7 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 					node_key_map[e1]=node_counter
 					node_counter+=1
 				if e2 not in node_key_map:
-					node_key_map[e1]=node_counter
+					node_key_map[e2]=node_counter
 					node_counter+=1
 				edge_list.append([int(node_key_map[e1]),int(node_key_map[e2]),float(w)])
 			edge_df = pd.concat([edge_df,pd.DataFrame(edge_list,columns=cols)], axis=0)
