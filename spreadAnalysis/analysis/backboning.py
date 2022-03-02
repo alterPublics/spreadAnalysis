@@ -33,7 +33,6 @@ def read(filename, column_of_interest, triangular_input = False, consider_self_l
 		table = filename
 	table = table[["src", "trg", column_of_interest]]
 	table.rename(columns = {column_of_interest: "nij"}, inplace = True)
-	print (table)
 	if drop_zeroes:
 		table = table[table["nij"] > 0]
 	if not consider_self_loops:
