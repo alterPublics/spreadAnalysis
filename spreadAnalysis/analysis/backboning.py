@@ -197,7 +197,7 @@ def _alpha_prior(data_row):
 
 def _beta_prior(data_row):
 
-	return = (data_row["mean_prior_probability"] / data_row["var_prior_probability"]) * (1 - (data_row["mean_prior_probability"] ** 2)) - (1 - data_row["mean_prior_probability"])
+	return (data_row["mean_prior_probability"] / data_row["var_prior_probability"]) * (1 - (data_row["mean_prior_probability"] ** 2)) - (1 - data_row["mean_prior_probability"])
 
 def _alpha_post(data_row):
 
