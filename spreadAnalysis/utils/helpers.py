@@ -84,7 +84,7 @@ def chunks_optimized(data, n_chunks=2):
         lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
         chunked[lowest][k]=v
         chunks_allo[lowest]+=len(v)
-    print (chunks_allo)
+    #print (chunks_allo)
     return list([v for v in chunked.values()])
 
 def random_wait(between=(1,3),skip_wait=None):
