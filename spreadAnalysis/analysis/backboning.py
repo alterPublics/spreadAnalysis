@@ -108,7 +108,7 @@ def test_densities(table, start, end, step):
 		avgdeg = (2.0 * edges) / nodes
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
-def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False):
+def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	trg_sum = table.groupby(by = "trg").apply_parallel(_by_sum, num_processes=num_cores)
