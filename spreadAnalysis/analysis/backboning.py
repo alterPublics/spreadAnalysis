@@ -145,62 +145,62 @@ def _mean_prior_prob(data_row):
 
 def _kappa(data_row):
 
-	data_row["kappa"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["kappa"] = data_row["n.."] / (data_row["ni."] * data_row["n.j"])
 	return data_row
 
 def _score(data_row):
 
-	data_row["score"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["score"] = ((data_row["kappa"] * data_row["nij"]) - 1) / ((data_row["kappa"] * data_row["nij"]) + 1)
 	return data_row
 
 def _var_prior_probability(data_row):
 
-	data_row["var_prior_probability"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["var_prior_probability"] = (1 / (data_row["n.."] ** 2)) * (data_row["ni."] * data_row["n.j"] * (data_row["n.."] - data_row["ni."]) * (data_row["n.."] - data_row["n.j"])) / ((data_row["n.."] ** 2) * ((data_row["n.."] - 1)))
 	return data_row
 
 def _alpha_prior(data_row):
 
-	data_row["alpha_prior"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["alpha_prior"] = (((data_row["mean_prior_probability"] ** 2) / data_row["var_prior_probability"]) * (1 - data_row["mean_prior_probability"])) - data_row["mean_prior_probability"]
 	return data_row
 
 def _beta_prior(data_row):
 
-	data_row["beta_prior"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["beta_prior"] = (data_row["mean_prior_probability"] / data_row["var_prior_probability"]) * (1 - (data_row["mean_prior_probability"] ** 2)) - (1 - data_row["mean_prior_probability"])
 	return data_row
 
 def _alpha_post(data_row):
 
-	data_row["alpha_post"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["alpha_post"] = data_row["alpha_prior"] + data_row["nij"]
 	return data_row
 
 def _beta_post(data_row):
 
-	data_row["beta_post"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["beta_post"] = data_row["n.."] - data_row["nij"] + data_row["beta_prior"]
 	return data_row
 
 def _expected_pij(data_row):
 
-	data_row["expected_pij"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["expected_pij"] = data_row["alpha_post"] / (data_row["alpha_post"] + data_row["beta_post"])
 	return data_row
 
 def _variance_nij(data_row):
 
-	data_row["variance_nij"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["variance_nij"] = data_row["expected_pij"] * (1 - data_row["expected_pij"]) * data_row["n.."]
 	return data_row
 
 def _d(data_row):
 
-	data_row["d"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["d"] = (1.0 / (data_row["ni."] * data_row["n.j"])) - (data_row["n.."] * ((data_row["ni."] + data_row["n.j"]) / ((data_row["ni."] * data_row["n.j"]) ** 2)))
 	return data_row
 
 def _variance_cij(data_row):
 
-	data_row["variance_cij"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["variance_cij"] = data_row["variance_nij"] * (((2 * (data_row["kappa"] + (data_row["nij"] * data_row["d"]))) / (((data_row["kappa"] * data_row["nij"]) + 1) ** 2)) ** 2)
 	return data_row
 
 def _sdev_cij(data_row):
 
-	data_row["sdev_cij"] = ((data_row["ni."] * data_row["n.j"]) / data_row["n.."]) * (1 / data_row["n.."])
+	data_row["sdev_cij"] = data_row["variance_cij"] ** .5
 	return data_row
 
 def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
@@ -212,9 +212,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
 	table["n.."] = table["nij"].sum()
-	#table["mean_prior_probability"] = table.apply(_mean_prior_prob, axis=1)["mean_prior_probability"]
 	table["mean_prior_probability"] = multi_process(func=_mean_prior_prob,data=table,num_process=num_cores,verbose=False)["mean_prior_probability"]
-	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 	if calculate_p_value:
 		table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
 		return table[["src", "trg", "nij", "score"]]
