@@ -129,7 +129,9 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	table = _multi_funcs(table,["alpha_post","beta_post"],[_alpha_post,_beta_post])
 	table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
 	table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
-	table = _multi_funcs(table,["d","variance_cij"],[_d,_variance_cij])
+	#table = _multi_funcs(table,["d","variance_cij"],[_d,_variance_cij])
+	table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
+	table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
 	table["sdev_cij"] = table["variance_cij"] ** .5
 	if not return_self_loops:
 		table = table[table["src"] != table["trg"]]
