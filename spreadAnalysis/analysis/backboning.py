@@ -112,7 +112,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	sys.stderr.write("Calculating NC score...\n")
 	#table = table.copy()
 	trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
-	src_sum = table.groupby(by = "src").apply_parallel(_by_sum, num_processes=num_cores)
+	src_sum = table.groupby(["src"]).apply_parallel(_by_sum, num_processes=num_cores)
 	#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
 	#src_sum = table.groupby(by = "src").sum()[["nij"]]
 	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
