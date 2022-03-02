@@ -150,7 +150,7 @@ def _multi_funcs(df,vars,funcs):
 
 	results = Pool(len(vars)).map(_multi_get_result,[(df,func) for func in funcs])
 	for var,result in zip(vars,results):
-		df[var]=func(df)
+		df[var]=result
 	return df
 
 def noise_corrected_NEW2(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
