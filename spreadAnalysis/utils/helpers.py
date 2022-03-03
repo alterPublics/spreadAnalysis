@@ -150,3 +150,11 @@ def date_is_between_dates(_date,start_date,end_date):
         return True
     else:
         return False
+
+def is_some(line):
+
+    line = str(line)
+    if "facebook." in line or "twitter." in line or "youtube." in line or "vk.com/" in line or "t.me/" in line or "reddit." in line or "gab.com/" in line or "tiktok." in line:
+        return True
+    else:
+        return False
