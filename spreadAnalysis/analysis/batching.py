@@ -311,7 +311,20 @@ def iteration_test():
 		if count % 100000 == 0:
 			print("--- {0} seconds --- total for {1}".format((time.time() - start_time),str(count)))
 
-def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([])):
+def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([]),actor_domains=[]):
+
+	def add_domains_as_actors(binet,actor_domains):
+
+		actor_domains = set(actor_domains)
+		for n,d in list(binet.g.nodes(data=True)):
+			if d["node_type"] == "url":
+				dom = LinkCleaner().remove_url_prefix(n).split("/")[0]
+				if len(actor_domains) > 0:
+					if dom in actor_domains:
+						binet.add_node_and_edges(dom,n,node_type0="actor",node_type1="url",weight=1)
+				else:
+					binet.add_node_and_edges(dom,n,node_type0="actor",node_type1="url",weight=1)
+		return binet
 
 	def add_data_to_net(docs,binet,has_been_queried,org_type):
 
@@ -408,8 +421,15 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
+	print ("Nodes in net after shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
 	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False)
-	print ("Nodes in net before shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
+	if actor_domains is None:
+		binet.g = add_domains_as_actors(binet,[])
+	elif len(actor_domains) > 0:
+		binet.g = add_domains_as_actors(binet,actor_domains)
+	else:
+		pass
+	print ("Nodes in net after domains added as actors {0}".format(len(list(binet.g.nodes()))))
 	print ("done")
 
 	return binet
