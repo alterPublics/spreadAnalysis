@@ -4,8 +4,6 @@ import pandas as pd
 import networkx as nx
 from collections import defaultdict
 from scipy.stats import binom
-from pandas_multiprocess import multi_process
-from multiprocesspandas import applyparallel
 from multiprocessing import Pool, Manager
 
 def read(filename, column_of_interest, triangular_input = False, consider_self_loops = True, undirected = False, drop_zeroes = True, sep = ","):

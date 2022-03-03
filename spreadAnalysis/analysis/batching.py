@@ -565,7 +565,7 @@ def stochastic_update_scheme_values(cat,batch_size=None,num_cores=12):
 
 	mdb.close()
 
-def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
+def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12,batch_size=1):
 
 	def add_node_and_edges(g,node0,node1,weight):
 
@@ -595,26 +595,27 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12):
 	del data
 	gc.collect()
 	start_time = time.time()
-	N = num_cores
-	S = int(len(net_data)/N)
-	net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores))
 	pool = Pool(num_cores)
-	rep_data = {}
-	results = pool.map(bi_to_uni,net_data)
-	del net_data
-	gc.collect()
-	print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
-	start_time = time.time()
-	edge_dict = {}
-	for result in results:
-		for k_tup, w in result.items():
-			edge_tup = (k_tup[0],k_tup[1])
-			if edge_tup in edge_dict:
-				edge_dict[edge_tup]+=w
-			else:
-				edge_dict[edge_tup]=w
-	print("--- %s seconds --- for to tabulate data" % (time.time() - start_time))
-	start_time = time.time()
+	if batch_size is not None:
+		edge_dict = {}
+		net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores*batch_size))
+		for i,net_data_batch in enumerate(hlp.chunks(net_data,num_cores)):
+			results = pool.map(bi_to_uni,net_data_batch)
+			print("--- %s seconds --- for num cores {0} to reproject data for batch {1}".format(num_cores,i) % (time.time() - start_time))
+			start_time = time.time()
+			for result in results:
+				for k_tup, w in result.items():
+					edge_tup = (k_tup[0],k_tup[1])
+					if edge_tup in edge_dict:
+						edge_dict[edge_tup]+=w
+					else:
+						edge_dict[edge_tup]=w
+			print("--- %s seconds --- to tabulate data for batch {0}".format(i) % (time.time() - start_time))
+			start_time = time.time()
+		del results
+		gc.collect()
+		del net_data
+		gc.collect()
 	if output == "net":
 		g = nx.Graph()
 		for result in results:
