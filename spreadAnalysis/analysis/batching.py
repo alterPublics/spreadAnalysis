@@ -598,7 +598,10 @@ def bi_to_uni_net(data,node0="actor",node1="url",output="net",num_cores=12,batch
 	pool = Pool(num_cores)
 	if batch_size is not None:
 		edge_dict = {}
-		net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores*batch_size,semi_opti=True))
+		if batch_size > 10:
+			net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores*batch_size,semi_opti=True))
+		else:
+			net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores*batch_size,semi_opti=False))
 		for i,net_data_batch in enumerate(hlp.chunks(net_data,num_cores)):
 			results = pool.map(bi_to_uni,net_data_batch)
 			print("--- %s seconds --- for num cores {0} to reproject data for batch {1}".format(num_cores,i) % (time.time() - start_time))
