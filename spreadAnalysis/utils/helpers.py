@@ -76,15 +76,26 @@ def chunks_dict(data, SIZE=10000):
     for i in range(0, len(data), SIZE):
         yield {k:data[k] for k in islice(it, SIZE)}
 
-def chunks_optimized(data, n_chunks=2):
+def chunks_optimized(data, n_chunks=2, semi_opti=False):
 
     chunked = {n:{} for n in range(n_chunks)}
     chunks_allo = {n:0 for n in range(n_chunks)}
-    for k,v in data.items():
-        lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
-        chunked[lowest][k]=v
-        chunks_allo[lowest]+=len(v)
-    #print (chunks_allo)
+    it_count = 0
+    if semi_opti:
+        for k,v in data.items():
+            it_count += 1
+            if it_count % 500 == 0:
+                lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
+            else:
+                lowest = random.randint(0,len(chunks_allo)-1)
+            chunked[lowest][k]=v
+            chunks_allo[lowest]+=len(v)
+    else:
+        for k,v in data.items():
+            lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
+            chunked[lowest][k]=v
+            chunks_allo[lowest]+=len(v)
+        #print (chunks_allo)
     return list([v for v in chunked.values()])
 
 def random_wait(between=(1,3),skip_wait=None):
