@@ -424,9 +424,9 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	print ("Nodes in net after shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
 	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False)
 	if actor_domains is None:
-		binet.g = add_domains_as_actors(binet,[])
+		binet = add_domains_as_actors(binet,[])
 	elif len(actor_domains) > 0:
-		binet.g = add_domains_as_actors(binet,actor_domains)
+		binet = add_domains_as_actors(binet,actor_domains)
 	else:
 		pass
 	print ("Nodes in net after domains added as actors {0}".format(len(list(binet.g.nodes()))))
