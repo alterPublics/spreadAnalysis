@@ -266,7 +266,7 @@ def find_urls(selection={},urls=[]):
 	mdb = MongoSpread()
 	final_urls = []
 	if len(selection) == 0 and len(urls) == 0:
-		return final_urls
+		return set(final_urls)
 	elif len(selection) == 0:
 		org_urls = list(urls)
 	else:
@@ -311,7 +311,7 @@ def iteration_test():
 		if count % 100000 == 0:
 			print("--- {0} seconds --- total for {1}".format((time.time() - start_time),str(count)))
 
-def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12):
+def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([])):
 
 	def add_data_to_net(docs,binet,has_been_queried,org_type):
 
@@ -362,6 +362,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 		else:
 			urls = find_urls(selection=url_selection,urls=urls)
 			first_degree_urls.update(urls)
+	first_degree_urls.update(direct_urls)
 	first_degree_urls.update(set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="url"]))
 	#del actors
 	#del urls
