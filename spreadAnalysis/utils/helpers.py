@@ -84,7 +84,7 @@ def chunks_optimized(data, n_chunks=2, semi_opti=False):
     if semi_opti:
         for k,v in data.items():
             it_count += 1
-            if it_count % 500 == 0:
+            if it_count % 100 == 0:
                 lowest = sorted(chunks_allo.items(), key=itemgetter(1), reverse=False)[0][0]
             else:
                 lowest = random.randint(0,len(chunks_allo)-1)

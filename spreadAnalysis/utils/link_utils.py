@@ -288,7 +288,7 @@ class LinkUtils:
 				return True
 		return False
 
-	def unpack_url(self,url,force_unpack=True):
+	def unpack_url(self,url,force_unpack=False):
 
 		if "http" not in url: url = "http://"+url
 		url = self._recursive_trim(url)

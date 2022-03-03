@@ -184,7 +184,7 @@ class CollectMongo:
         #scrp = Scraper(settings={"change_user_agent":True,"exe_path":self.conf.CHROMEDRIVER})
         #scrp.browser_init()
         scrp = None
-        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=False)
+        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=True)
         if not isinstance(clean_url,list):
             clean_url = clean_url["unpacked"]
             clean_url = LinkCleaner().strip_backslash(clean_url)
