@@ -404,6 +404,8 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],node0_extra=doc[extra])
 						else:
 							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"])
+					else:
+						print (doc)
 		return binet
 
 	if len(only_platforms) < 1:
