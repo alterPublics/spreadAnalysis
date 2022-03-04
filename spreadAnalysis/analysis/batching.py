@@ -298,7 +298,7 @@ def query_multi(args):
 	docs = []
 	for query in queries:
 		if db == "url_bi_network":
-			docs.extend(list(mdb.database[db].find(query,{"url":1,"actor":1,"message_ids":1})))
+			docs.extend(list(mdb.database[db].find(query,{"url":1,"actor":1,"message_ids":1,"actor_platform":1})))
 		else:
 			docs.extend(list(mdb.database[db].find(query)))
 	mdb.close()
@@ -450,9 +450,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			first_degree_urls.update(urls)
 	first_degree_urls.update(direct_urls)
 	first_degree_urls.update(set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="url"]))
-	#del actors
-	#del urls
-	#del results
 	gc.collect()
 
 	print ("building first degree connections.")
@@ -469,8 +466,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	for result in results:
 		for fdocs in pool.map(filter_docs,[(l,"actor",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 			binet = add_data_to_net(fdocs,binet,has_been_queried,"actor",extra="actor")
-			print (len(fdocs))
-	print ([d["extra"] for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor"])
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
@@ -482,7 +477,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	print ("searching for second degree interconnections.")
 	fucount = 0
 	fchunks_size = 2
-	print (second_degree_actors)
 	for _factor_chunk in hlp.chunks(list(second_degree_actors),int(len(list(second_degree_actors))/fchunks_size)+1):
 		second_degree_queries = []
 		for _factor in _factor_chunk:
@@ -493,7 +487,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			print (len(result))
 			for fdocs in pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 				binet = add_data_to_net(fdocs,binet,has_been_queried_first_degree,"url",extra="actor")
-		print (fucount)
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
