@@ -120,8 +120,10 @@ class CollectMongo:
 
         return prev_keys
 
-    def resolve_dates_from_pulls(self,input,method,start_date,end_date):
+    def resolve_dates_from_pulls(self,input,method,start_date,end_date,recollect=False):
 
+        if recollect:
+            return start_date,end_date
         attempts = []
         if isinstance(input,list):
             for inp in input:
@@ -232,13 +234,13 @@ class CollectMongo:
                 if doc["platform_dest"] in platform_list]
         for pull in self.mdb.database["pull"].find(query):
             if pull["input_type"]=="url":
-                self.url_collect([{"Url":pull["input"],"Domain":0}],start_date,end_date)
+                self.url_collect([{"Url":pull["input"],"Domain":0}],start_date,end_date,recollect=True)
             if pull["input_type"]=="actor":
-                self.actor_collect([pull["input"]],start_date,end_date)
+                self.actor_collect([pull["input"]],start_date,end_date,recollect=True)
             if pull["input_type"]=="actor":
-                self.domain_collect([pull["input"]],start_date,end_date)
+                self.domain_collect([pull["input"]],start_date,end_date,recollect=True)
 
-    def url_collect(self,org_urls,input_sd,input_ed):
+    def url_collect(self,org_urls,input_sd,input_ed,recollect=False):
 
         org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "0" or str(d["Domain"]) == "0.0"])
         cleaned_urls = {doc["url"]:doc["clean_url"] for doc in \
@@ -265,7 +267,7 @@ class CollectMongo:
             resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("url").items():
                 start_date, end_date = input_sd, input_ed
-                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date,recollect=recollect)
                 if start_date is None:
                     continue
                 try:
@@ -284,7 +286,7 @@ class CollectMongo:
                 else:
                     print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(cleaned_url) + " - " + str(method_name) + " - " + str("ERROR in Data Retrieval"))
 
-    def actor_collect(self,org_actors,input_sd,input_ed):
+    def actor_collect(self,org_actors,input_sd,input_ed,recollect=False):
 
         if self.low_memory:
             prev_post_ids = None
@@ -315,7 +317,7 @@ class CollectMongo:
                                 for actor_alias in actor_aliases[alias["platform"]][platform_alias]:
                                     resolve_inputs.append(actor_alias)
                         resolve_inputs = list(set(resolve_inputs))
-                        start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                        start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date,recollect=recollect)
                         if start_date is None:
                             continue
                         try:
@@ -335,7 +337,7 @@ class CollectMongo:
                         else:
                             print ("({0} : {1})".format(str(start_date),str(end_date)) + " - " + str(platform_alias) + " - " + str(method_name) + " - " + str("ERROR in Data Retrieval"))
 
-    def domain_collect(self,org_urls,input_sd,input_ed,actor_web=False):
+    def domain_collect(self,org_urls,input_sd,input_ed,actor_web=False,recollect=False):
 
         cleaned_urls = {doc["url"]:doc["clean_url"] for doc in \
             self.mdb.database["clean_url"].find({},{ "url": 1, "clean_url": 1})}
@@ -363,7 +365,7 @@ class CollectMongo:
             resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("domain").items():
                 start_date, end_date = input_sd, input_ed
-                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date)
+                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date,recollect=recollect)
                 if start_date is None:
                     continue
                 l_start_date, l_end_date = start_date, start_date
