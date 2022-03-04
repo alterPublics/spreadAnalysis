@@ -37,18 +37,18 @@ def bi_to_uni(data):
 						rep_data[(n1[0],n2[0])]=n1[1]
 	return rep_data
 
-def update_actor_message():
+def update_actor_message(new=False):
 
-	net_db = self.database["url_bi_network"]
+	actor_db = self.database["actor_message"]
 	try:
-		net_db.drop_index('actor_-1')
+		actor_db.drop_index('actor_-1')
 	except:
 		pass
 	if new:
-		net_db.drop()
-		net_db = self.database["url_bi_network"]
+		actor_db.drop()
+		actor_db = self.database["actor_message"]
 		self.create_indexes()
-	max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
+	max_net_date = list(actor_db.find().sort("inserted_at",-1).limit(1))
 	if max_net_date is None or len(max_net_date) < 1:
 		max_net_date = datetime(2000,1,1)
 	else:
@@ -467,7 +467,8 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	for result in results:
 		for fdocs in pool.map(filter_docs,[(l,"actor",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 			binet = add_data_to_net(fdocs,binet,has_been_queried,"actor",extra="actor")
-	print (len(fdocs))
+			print (len(fdocs))
+	print ([d["extra"] for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor"])
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
