@@ -37,9 +37,44 @@ def bi_to_uni(data):
 						rep_data[(n1[0],n2[0])]=n1[1]
 	return rep_data
 
-def update_actor_messages():
+def update_actor_message():
 
-	pass
+	actor_message_db = self.database["actor_message"]
+	cur = actor_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
+	next_actor_post = True
+	batch_insert = {}
+	count = 0
+	while next_actor_post is not None:
+		count += 1
+		next_actor_post = next(cur, None)
+		if next_actor_post is not None:
+			message_id = next_actor_post["message_id"]
+			actor = next_actor_post["input"]
+			if not message_id in seen_ids:
+				post = post_db.find_one({"message_id":message_id})
+				platform = Spread._get_platform(data=post,method=post["method"])
+				platform_type = Spread._get_platform_type(data=post,method=post["method"])
+				actor_username = Spread._get_actor_username(data=post,method=post["method"])
+				actor_platform = str(actor)+"_"+str(platform_type)
+				actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+				url = Spread._get_message_link(data=post,method=post["method"])
+				domain = Spread._get_message_link_domain(data=post,method=post["method"])
+				if url is not None:
+					url = LinkCleaner().single_clean_url(url)
+					url = LinkCleaner().sanitize_url_prefix(url)
+					if (url,actor) not in batch_insert:
+						batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
+											"actor":actor,"actor_label":actor_label,"platform":platform,
+											"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+					batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
+					if len(batch_insert) >= 10000:
+						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+						batch_insert = {}
+					if count % 1000 == 0:
+						print ("actor loop " + str(count))
+	if len(batch_insert) > 0:
+		self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+	net_db.create_index([ ("actor", -1) ])
 
 def get_agg_actor_metrics(actors):
 
@@ -415,6 +450,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	print ("searching for second degree interconnections.")
 	fucount = 0
 	fchunks_size = 2
+	print (second_degree_actors)
 	for _factor_chunk in hlp.chunks(list(second_degree_actors),int(len(list(second_degree_actors))/fchunks_size)+1):
 		second_degree_queries = []
 		for _factor in _factor_chunk:
@@ -422,6 +458,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			second_degree_queries.append({"actor":_factor,"platform":{"$in":only_platforms}})
 		results = pool.map(query_multi,[("url_bi_network",l) for l in hlp.chunks(second_degree_queries,int(len(second_degree_queries)/num_cores)+1)])
 		for result in results:
+			print (len(result))
 			for fdocs in pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 				binet = add_data_to_net(fdocs,binet,has_been_queried_first_degree,"url",extra="actor")
 		print (fucount)
