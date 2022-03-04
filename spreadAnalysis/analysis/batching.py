@@ -326,13 +326,16 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 					binet.add_node_and_edges(dom,n,node_type0="actor",node_type1="url",weight=1)
 		return binet
 
-	def add_data_to_net(docs,binet,has_been_queried,org_type):
+	def add_data_to_net(docs,binet,has_been_queried,org_type,extra=None):
 
 		for doc in docs:
 			if doc[org_type] not in has_been_queried:
 				if doc["message_ids"] > 0:
 					if doc["actor"] is not None and doc["url"] is not None and "actor_platform" in doc:
-						binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"])
+						if extra is not None:
+							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],extra=doc[extra])
+						else:
+							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],extra=doc[extra])
 		return binet
 
 	if len(only_platforms) < 1:
@@ -357,7 +360,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			has_been_queried.add(actor)
 		results = pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(temp_docs,int(len(temp_docs)/num_cores)+1)])
 		for result in results:
-			binet = add_data_to_net(result,binet,{},"actor")
+			binet = add_data_to_net(result,binet,{},"actor",extra="actor")
 		alias_queries = []
 		for alias_doc in aliases:
 			alias_queries.append({"actor":alias_doc["alias"],"platform":{"$in":only_platforms}})
@@ -365,7 +368,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 		results = pool.map(query_multi,[("url_bi_network",l) for l in hlp.chunks(alias_queries,int(len(alias_queries)/num_cores)+1)])
 		for result in results:
 			for fdocs in pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
-				binet = add_data_to_net(fdocs,binet,{},"actor")
+				binet = add_data_to_net(fdocs,binet,{},"actor",extra="actor")
 	if "url" in selection_types:
 		print ("urls...")
 		if len(urls) > 0 and len(url_selection) == 0:
@@ -395,14 +398,14 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	results = pool.map(query_multi,[("url_bi_network",l) for l in hlp.chunks(first_degree_queries,int(len(first_degree_queries)/num_cores)+1)])
 	for result in results:
 		for fdocs in pool.map(filter_docs,[(l,"actor",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
-			binet = add_data_to_net(fdocs,binet,has_been_queried,"actor")
+			binet = add_data_to_net(fdocs,binet,has_been_queried,"actor",extra="actor")
 
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
-	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False)
+	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False,extra="actor")
 	print ("Nodes in net after shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
-	second_degree_actors = set([n for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor" and n not in has_been_queried])
+	second_degree_actors = set([d["extra"] for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor" and n not in has_been_queried])
 	print (len(second_degree_actors))
 
 	print ("searching for second degree interconnections.")
@@ -416,12 +419,12 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 		results = pool.map(query_multi,[("url_bi_network",l) for l in hlp.chunks(second_degree_queries,int(len(second_degree_queries)/num_cores)+1)])
 		for result in results:
 			for fdocs in pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
-				binet = add_data_to_net(fdocs,binet,has_been_queried_first_degree,"url")
+				binet = add_data_to_net(fdocs,binet,has_been_queried_first_degree,"url",extra="actor")
 		print (fucount)
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
-	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False)
+	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False,extra="actor")
 	print ("Nodes in net after shave {0} for second degree urls".format(len(list(binet.g.nodes()))))
 	if actor_domains is None:
 		binet = add_domains_as_actors(binet,[])

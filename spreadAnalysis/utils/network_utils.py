@@ -155,21 +155,27 @@ class NetworkUtils:
 		return g
 
 	@classmethod
-	def filter_by_degrees(cls,g,degree=1,skip_nodes={},preserve_skip_node_edges=True):
+	def filter_by_degrees(cls,g,degree=1,skip_nodes={},preserve_skip_node_edges=True,extra=None):
 
 		deg = nx.degree(g)
 		if preserve_skip_node_edges:
 			new_skip_nodes = set([])
-			for node in list(g.nodes()):
+			for node,d in list(g.nodes(data=True)):
 				if node in skip_nodes:
+					for org, edge in list(g.edges(node)):
+						new_skip_nodes.add(org)
+						new_skip_nodes.add(edge)
+				if extra is not None and d[extra] in skip_nodes:
 					for org, edge in list(g.edges(node)):
 						new_skip_nodes.add(org)
 						new_skip_nodes.add(edge)
 			skip_nodes = new_skip_nodes
 
-		for node in list(g.nodes()):
+		for node,d in list(g.nodes(data=True)):
 			if deg[node] < degree:
 				if node in skip_nodes:
+					pass
+				elif extra is not None and d[extra] in skip_nodes:
 					pass
 				else:
 					g.remove_node(node)
