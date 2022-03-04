@@ -105,9 +105,13 @@ class Net(NetworkUtils):
 			new_data[node]=data_row
 		return new_data
 
-	def add_node_and_edges(self,node0,node1,node_type0="node",node_type1="node",weight=1):
+	def add_node_and_edges(self,node0,node1,node_type0="node",node_type1="node",weight=1,node0_extra=None):
 
-		if node0 not in self.g: self.g.add_node(node0,node_type=node_type0)
+		if node0 not in self.g:
+			if node0_extra is not None:
+				self.g.add_node(node0,node_type=node_type0,extra=node0_extra)
+			else:
+				self.g.add_node(node0,node_type=node_type0)
 		if node1 not in self.g: self.g.add_node(node1,node_type=node_type1)
 		if self.g.has_edge(node0,node1):
 			self.g.get_edge_data(node0,node1)['weight'] += weight

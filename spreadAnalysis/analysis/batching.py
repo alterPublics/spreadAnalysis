@@ -333,9 +333,9 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 				if doc["message_ids"] > 0:
 					if doc["actor"] is not None and doc["url"] is not None and "actor_platform" in doc:
 						if extra is not None:
-							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],extra=doc[extra])
+							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],node0_extra=doc[extra])
 						else:
-							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"],extra=doc[extra])
+							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"])
 		return binet
 
 	if len(only_platforms) < 1:
