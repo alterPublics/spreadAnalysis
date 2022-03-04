@@ -39,6 +39,35 @@ def bi_to_uni(data):
 
 def update_actor_message():
 
+	net_db = self.database["url_bi_network"]
+	try:
+		net_db.drop_index('actor_-1')
+	except:
+		pass
+	if new:
+		net_db.drop()
+		net_db = self.database["url_bi_network"]
+		self.create_indexes()
+	max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
+	if max_net_date is None or len(max_net_date) < 1:
+		max_net_date = datetime(2000,1,1)
+	else:
+		if "updated_at" in max_net_date[0]:
+			max_net_date = max_net_date[0]["updated_at"]
+		elif "inserted_at" in max_net_date[0]:
+			max_net_date = max_net_date[0]["inserted_at"]
+		max_net_date = max_net_date-timedelta(days=1)
+
+	aliases = self.get_aliases()
+	actor_aliases = self.get_actor_aliases(platform_sorted=False)
+	url_post_db = self.database["url_post"]
+	post_db = self.database["post"]
+	cur = url_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
+	#print (url_post_db.count_documents({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}))
+	next_url_post = True
+	batch_insert = {}
+	seen_ids = set([])
+	count = 0
 	actor_message_db = self.database["actor_message"]
 	cur = actor_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
 	next_actor_post = True
@@ -438,13 +467,13 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 	for result in results:
 		for fdocs in pool.map(filter_docs,[(l,"actor",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 			binet = add_data_to_net(fdocs,binet,has_been_queried,"actor",extra="actor")
-
+	print (len(fdocs))
 	del results
 	gc.collect()
 	print ("Nodes in net before shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
 	binet.g = binet.filter_by_degrees(binet.g,degree=2,skip_nodes=has_been_queried,preserve_skip_node_edges=False,extra="actor")
 	print ("Nodes in net after shave {0} for second degree actors".format(len(list(binet.g.nodes()))))
-	second_degree_actors = set([d["extra"] for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor" and n not in has_been_queried])
+	second_degree_actors = set([d["extra"] for n,d in binet.g.nodes(data=True) if d["node_type"]=="actor" and d["extra"] not in has_been_queried])
 	print (len(second_degree_actors))
 
 	print ("searching for second degree interconnections.")
