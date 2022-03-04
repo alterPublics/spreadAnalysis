@@ -331,8 +331,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 		for doc in docs:
 			if doc[org_type] not in has_been_queried:
 				if doc["message_ids"] > 0:
-					if doc["actor"] is not None and doc["url"] is not None:
-						print (doc)
+					if doc["actor"] is not None and doc["url"] is not None and "actor_platform" in doc:
 						binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"])
 		return binet
 
