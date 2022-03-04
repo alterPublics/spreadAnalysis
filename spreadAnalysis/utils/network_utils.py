@@ -165,7 +165,7 @@ class NetworkUtils:
 					for org, edge in list(g.edges(node)):
 						new_skip_nodes.add(org)
 						new_skip_nodes.add(edge)
-				if extra is not None and d[extra] in skip_nodes:
+				if extra is not None and extra in d and d[extra] in skip_nodes:
 					for org, edge in list(g.edges(node)):
 						new_skip_nodes.add(org)
 						new_skip_nodes.add(edge)
@@ -175,7 +175,7 @@ class NetworkUtils:
 			if deg[node] < degree:
 				if node in skip_nodes:
 					pass
-				elif extra is not None and d[extra] in skip_nodes:
+				elif extra is not None and extra in d and d[extra] in skip_nodes:
 					pass
 				else:
 					g.remove_node(node)

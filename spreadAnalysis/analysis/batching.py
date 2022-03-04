@@ -37,6 +37,10 @@ def bi_to_uni(data):
 						rep_data[(n1[0],n2[0])]=n1[1]
 	return rep_data
 
+def update_actor_messages():
+
+	pass
+
 def get_agg_actor_metrics(actors):
 
 	agg_data = {}
