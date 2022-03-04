@@ -34,7 +34,7 @@ class Spread:
 			if "post_id" in data:
 				_val = str(data["post_id"])+"_"+str(data["id"])
 			else:
-				_val = str(data["id"])
+				_val = str(data["owner_id"])+"_"+str(data["id"])
 		if method=="reddit":
 			_val = str(data["id"])
 		if method=="majestic":

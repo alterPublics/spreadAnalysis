@@ -379,6 +379,10 @@ class MongoSpread(MongoDatabase):
 				actor_df["Domain"]=pd.to_numeric(actor_df["Domain"],downcast='integer')
 			cols = actor_df.columns
 			actor_docs = [{col:row[col] for col in cols} for i,row in actor_df.iterrows()]
+			for d in actor_docs:
+				if d[key_col] in prev_ids and d["org_project_title"] != custom_title:
+					print ("found duplicate actor. {}. aborting.".format(d[key_col]))
+					sys.exit()
 
 			inserts, updates = [d for d in actor_docs if d[key_col] not in prev_ids],\
 				[d for d in actor_docs if d[key_col] in prev_ids]
@@ -608,8 +612,15 @@ class MongoSpread(MongoDatabase):
 def test():
 
 	m = MongoSpread()
-	m.update_url_bi_network(new=False)
+	#m.update_url_bi_network(new=False)
 	#m.bi_to_uni_net("url","actor")
+	updates = []
+	for d in m.database["actor_post"].aggregate([{"$match":{"input":"Kontrast"}},{"$lookup":{"from":"post","localField":"message_id","foreignField":"message_id","as":"message_dat"}},{"$project":{"input":1,"message_dat.method":1,"message_id":1}}]):
+		if d["message_dat"][0]["method"] == "twitter2":
+			updates.append(UpdateOne({"input":"Kontrast","message_id":d["message_id"]},
+						{'$set': {"input":"KontrastDK","message_id":d["message_id"]}}))
+	#m.database["actor_post"].bulk_write(updates)
+
 
 if __name__ == '__main__':
 	args = sys.argv

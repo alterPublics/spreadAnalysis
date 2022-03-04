@@ -223,6 +223,21 @@ class CollectMongo:
         article.download()
         article.parse()
 
+    def recollect(self,query,start_date,end_date,platform_list=None):
+
+        if platform_list is None:
+            self.platform_info = self.mdb.get_data_from_db(self.mdb.database["platform"])
+        else:
+            self.platform_info = [doc for doc in self.mdb.get_data_from_db(self.mdb.database["platform"])\
+                if doc["platform_dest"] in platform_list]
+        for pull in self.mdb.database["pull"].find(query):
+            if pull["input_type"]=="url":
+                self.url_collect([{"Url":pull["input"],"Domain":0}],start_date,end_date)
+            if pull["input_type"]=="actor":
+                self.actor_collect([pull["input"]],start_date,end_date)
+            if pull["input_type"]=="actor":
+                self.domain_collect([pull["input"]],start_date,end_date)
+
     def url_collect(self,org_urls,input_sd,input_ed):
 
         org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "0" or str(d["Domain"]) == "0.0"])
@@ -335,6 +350,7 @@ class CollectMongo:
         #prev_pulls = self.get_pulls("domain")
 
         for org_url in org_urls:
+            if hlp.is_some(org_url): continue
             if org_url in cleaned_urls:
                 cleaned_url = cleaned_urls[org_url]
             else:
