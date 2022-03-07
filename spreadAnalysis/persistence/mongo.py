@@ -186,8 +186,12 @@ class MongoDatabase:
 						doc["updated_at"]=datetime.now()
 						if sub_mapping is not None:
 							old_doc = db.find_one({ key_col[0]: doc[key_col[0]],key_col[1]: doc[key_col[1]] })
-							new_mapping = set(doc[sub_mapping])
-							new_mapping.update(set(old_doc[sub_mapping]))
+							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
+								new_mapping = dict(doc[sub_mapping])
+								new_mapping.update(dict(old_doc[sub_mapping]))
+							else:
+								new_mapping = set(doc[sub_mapping])
+								new_mapping.update(set(old_doc[sub_mapping]))
 							doc[sub_mapping]=list(new_mapping)
 						bulks.append(UpdateOne({key_col[0]:doc[key_col[0]],key_col[1]: doc[key_col[1]]},
 									{'$set': doc}))

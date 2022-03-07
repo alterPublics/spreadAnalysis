@@ -15,9 +15,8 @@ import networkx as nx
 from collections import defaultdict
 from spreadAnalysis.io.config_io import Config
 import fasttext
-from datetime import datetime
-
-np.seterr(all="ignore")
+from datetime import datetime, timedelta
+import warnings
 
 try:
 	conf = Config()
@@ -128,6 +127,7 @@ def aggregate_actor_data(args):
 		post_dates = []
 		followers = []
 		for poid in poids:
+			posts.add(poid)
 			post_doc = mdb.database["post"].find_one({"_id":poid})
 			langs.append(Spread._get_lang(data=post_doc,method=post_doc["method"],model=lang_model))
 			interactions.append(Spread._get_interactions(data=post_doc,method=post_doc["method"]))
@@ -138,6 +138,15 @@ def aggregate_actor_data(args):
 			account_type = Spread._get_account_type(data=post_doc,method=post_doc["method"])
 			account_category = Spread._get_account_category(data=post_doc,method=post_doc["method"])
 			link_to_actor = Spread._get_link_to_actor(data=post_doc,method=post_doc["method"])
+
+			url = Spread._get_message_link(data=post_doc,method=post_doc["method"])
+			if url is not None:
+				url = LinkCleaner().single_clean_url(url)
+				url = LinkCleaner().sanitize_url_prefix(url)
+				domain = Spread._get_message_link_domain(data=post_doc,method=post_doc["method"])
+				most_popular_url_shared[url]+=1
+				unique_domains.add(domain)
+				most_often_shared_domain.append(domain)
 		if len(most_popular_url_shared) > 0:
 			most_poluar_url = sorted(most_popular_url_shared.items(), key = itemgetter(1), reverse=True)[0][0]
 			most_shared_domain = max(most_often_shared_domain, key = most_often_shared_domain.count)
@@ -147,6 +156,7 @@ def aggregate_actor_data(args):
 		actor_doc = {  "actor_name":actor_info[actor]["actor_label"],
 						"actor":actor_info[actor]["actor"],
 						"actor_username":actor_info[actor]["actor_username"],
+						"actor_platform":actor,
 						"most_popular_url_shared":most_poluar_url,
 						"n_unique_domains_shared":len(unique_domains),
 						"most_often_shared_domain":most_shared_domain,
@@ -166,25 +176,35 @@ def aggregate_actor_data(args):
 						"link_to_actor":link_to_actor,
 						}
 		actor_data.append(actor_doc)
-		mdb.close()
+	mdb.close()
 	return actor_data
 
+def update_agg_actor_metrics(num_cores=10):
 
-def update_agg_actor_metrics(num_cores=8):
-
+	warnings.filterwarnings('ignore')
+	np.seterr(all="ignore")
 	mdb = MongoSpread()
 	pool = Pool(num_cores)
-	batch_size = 3000*num_cores
+	batch_size = 1000*num_cores
 	actor_count = 0
 	actor_metric_db = mdb.database["actor_metric"]
 	actor_platform_db = mdb.database["actor_platform_post"]
 	actor_metric_db.drop()
 	actor_platform = True
-	cur = actor_platform_db.find({})
 	batch_insert = {}
 	actor_info = {}
-	while actor_platform is not None:
-		actor_platform = next(cur,None)
+	max_upd_date = list(actor_metric_db.find().sort("updated_at",-1).limit(1))
+	if max_upd_date is None or len(max_upd_date) < 1:
+		max_upd_date = list(actor_metric_db.find().sort("inserted_at",-1).limit(1))
+		if max_upd_date is None or len(max_upd_date) < 1:
+			max_upd_date = datetime(2000,1,1)
+		else:
+			max_upd_date = max_upd_date[0]["inserted_at"]
+	else:
+		max_upd_date = max_upd_date[0]["updated_at"]
+	max_upd_date = max_upd_date-timedelta(days=1)
+	for actor_platform in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},no_cursor_timeout=True):
+		#actor_platform = next(cur,None)
 		if actor_platform is not None:
 			unique_actor = actor_platform["actor_platform"]
 			actor_count += 1
@@ -193,14 +213,18 @@ def update_agg_actor_metrics(num_cores=8):
 										"actor_label":actor_platform["actor_label"],
 										"actor":actor_platform["actor"]}
 		if len(batch_insert) >= batch_size or actor_platform is None:
-			chunked_batches = [(l,actor_info) for l in hlp.chunks_optimized(batch_insert,num_cores)]
-			results = pool.map(aggregate_actor_data,chunked_batches)
+			if num_cores > 1:
+				chunked_batches = [(l,actor_info) for l in hlp.chunks_optimized(batch_insert,num_cores)]
+				results = pool.map(aggregate_actor_data,chunked_batches)
+			else:
+				results = [aggregate_actor_data((batch_insert,actor_info))]
 			for result in results:
 				mdb.write_many(actor_metric_db,result,key_col="actor_platform")
 			batch_insert = {}
 			actor_info = {}
 		if actor_count % 1000 == 0:
 			print ("actor loop " + str(actor_count))
+	cur.close()
 	mdb.close()
 
 def filter_docs(args):
