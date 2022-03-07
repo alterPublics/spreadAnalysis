@@ -225,7 +225,7 @@ class CollectMongo:
         article.download()
         article.parse()
 
-    def recollect(self,query,start_date,end_date,platform_list=None):
+    def recollect(self,query,start_date,end_date,platform_list=None,collected_before=None):
 
         if platform_list is None:
             self.platform_info = self.mdb.get_data_from_db(self.mdb.database["platform"])
@@ -233,11 +233,21 @@ class CollectMongo:
             self.platform_info = [doc for doc in self.mdb.get_data_from_db(self.mdb.database["platform"])\
                 if doc["platform_dest"] in platform_list]
         for pull in self.mdb.database["pull"].find(query):
+            if collected_before:
+                pull_attempts = pull["attempts"]
+                attempts = []
+                attempts.extend([hlp.to_default_date_format(a["inserted_at"]) for a in pull_attempts if a["returned_posts"] is not None])
+                attempts.extend([hlp.to_default_date_format(a["updated_at"]) for a in pull_attempts if a["returned_posts"] is not None and "updated_at" in a])
+                max_a = max(attempts)
+                if max_a > hlp.to_default_date_format(collected_before):
+                    continue
             if pull["input_type"]=="url":
                 self.url_collect([{"Url":pull["input"],"Domain":0}],start_date,end_date,recollect=True)
             if pull["input_type"]=="actor":
-                self.actor_collect([pull["input"]],start_date,end_date,recollect=True)
-            if pull["input_type"]=="actor":
+                actor = self.mdb.database["actor"].find_one({"Actor":pull["input"]})
+                if actor is not None:
+                    self.actor_collect([actor],start_date,end_date,recollect=True)
+            if pull["input_type"]=="domain":
                 self.domain_collect([pull["input"]],start_date,end_date,recollect=True)
 
     def url_collect(self,org_urls,input_sd,input_ed,recollect=False):
@@ -356,7 +366,10 @@ class CollectMongo:
             if org_url in cleaned_urls:
                 cleaned_url = cleaned_urls[org_url]
             else:
-                cleaned_url = self.get_clean_url(org_url,is_domain=True)
+                try:
+                    cleaned_url = self.get_clean_url(org_url,is_domain=True)
+                except:
+                    cleaned_url = None
                 cleaned_urls[org_url]=cleaned_url
                 self.mdb.insert_one(self.mdb.database["clean_url"],
                     {"url":org_url,"clean_url":cleaned_url})

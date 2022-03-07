@@ -171,7 +171,7 @@ class Vkontakte:
 
 	def actor_content(self,actor,start_date=None,end_date=None):
 
-		actor = LinkCleaner().extract_username(actor)
+		actor = LinkCleaner().extract_username(actor,never_none=True)
 		data = {"input":actor,
 				"input_type":"actor",
 				"output":[],

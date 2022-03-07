@@ -4,6 +4,15 @@ from datetime import datetime
 import spreadAnalysis.utils.helpers as hlp
 from spreadAnalysis.io.config_io import Config
 
+PLATFORM_TO_STR_ID = {"facebook":["facebook."],
+						"instagram":["instagram."],
+						"twitter":["twitter.","t.co"],
+						"gab":["gab.com"],
+						"tiktok":["tiktok."],
+						"telegram":["t.me/"],
+						"reddit":["reddit."],
+						"youtube":["youtube.","youtu.be"],
+						"vkontakte":["vk.com/"]}
 
 class Spread:
 
@@ -135,9 +144,30 @@ class Spread:
 		return _val
 
 	@staticmethod
+	def _get_all_external_message_links(method=None,data=None):
+
+		all_text = Spread._get_message_text(method=method,data=data)
+		url_list = LinkCleaner().get_url_list_from_text(all_text)
+		pl = Spread._get_platform(method=method,data=data)
+		all_urls = []
+		for url in url_list:
+			pl_found = False
+			if pl in PLATFORM_TO_STR_ID:
+				for pstr in PLATFORM_TO_STR_ID[pl]:
+					if pstr in str(url):
+						pl_found = True
+			if not pl_found:
+				all_urls.append(url)
+
+		return all_urls
+
+	@staticmethod
 	def _get_message_link_domain(method=None,data=None):
 		_val = None
-		_val = LinkCleaner().extract_special_url(Spread._get_message_link(data=data,method=method))
+		try:
+			_val = LinkCleaner().extract_special_url(Spread._get_message_link(data=data,method=method))
+		except:
+			LinkCleaner().extract_domain(Spread._get_message_link(data=data,method=method))
 		return _val
 
 	@staticmethod
@@ -396,7 +426,7 @@ class Spread:
 	@staticmethod
 	def _get_platform_type(method=None,data=None):
 
-		_val = None
+		_val = "UNKNOWN"
 		if method=="crowdtangle":
 			if data["platform"]=="Instagram":
 				_val = "Instagram"

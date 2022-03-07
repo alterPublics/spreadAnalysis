@@ -15,6 +15,9 @@ import networkx as nx
 from collections import defaultdict
 from spreadAnalysis.io.config_io import Config
 import fasttext
+from datetime import datetime
+
+np.seterr(all="ignore")
 
 try:
 	conf = Config()
@@ -39,15 +42,16 @@ def bi_to_uni(data):
 
 def update_actor_message(new=False):
 
-	actor_db = self.database["actor_message"]
+	mdb = MongoSpread()
+	actor_db = mdb.database["actor_platform_post"]
 	try:
 		actor_db.drop_index('actor_-1')
 	except:
 		pass
 	if new:
 		actor_db.drop()
-		actor_db = self.database["actor_message"]
-		self.create_indexes()
+		actor_db = mdb.database["actor_platform_post"]
+		mdb.create_indexes()
 	max_net_date = list(actor_db.find().sort("inserted_at",-1).limit(1))
 	if max_net_date is None or len(max_net_date) < 1:
 		max_net_date = datetime(2000,1,1)
@@ -56,132 +60,148 @@ def update_actor_message(new=False):
 			max_net_date = max_net_date[0]["updated_at"]
 		elif "inserted_at" in max_net_date[0]:
 			max_net_date = max_net_date[0]["inserted_at"]
-		max_net_date = max_net_date-timedelta(days=1)
+		max_net_date = max_net_date-timedelta(days=2)
 
-	aliases = self.get_aliases()
-	actor_aliases = self.get_actor_aliases(platform_sorted=False)
-	url_post_db = self.database["url_post"]
-	post_db = self.database["post"]
-	cur = url_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
-	#print (url_post_db.count_documents({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}))
-	next_url_post = True
+	aliases = mdb.get_aliases()
+	actor_aliases = mdb.get_actor_aliases(platform_sorted=False)
+	post_db = mdb.database["post"]
+	cur = post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]})
+	next_post = True
 	batch_insert = {}
 	seen_ids = set([])
 	count = 0
-	actor_message_db = self.database["actor_message"]
-	cur = actor_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
-	next_actor_post = True
-	batch_insert = {}
-	count = 0
-	while next_actor_post is not None:
+	while next_post is not None:
 		count += 1
-		next_actor_post = next(cur, None)
-		if next_actor_post is not None:
-			message_id = next_actor_post["message_id"]
-			actor = next_actor_post["input"]
+		next_post = next(cur, None)
+		if next_post is not None:
+			message_id = next_post["message_id"]
+			post_obj_id = next_post["_id"]
 			if not message_id in seen_ids:
-				post = post_db.find_one({"message_id":message_id})
+				post = next_post
 				platform = Spread._get_platform(data=post,method=post["method"])
+				actor_id = Spread._get_actor_id(data=post,method=post["method"])
 				platform_type = Spread._get_platform_type(data=post,method=post["method"])
 				actor_username = Spread._get_actor_username(data=post,method=post["method"])
-				actor_platform = str(actor)+"_"+str(platform_type)
 				actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
 				url = Spread._get_message_link(data=post,method=post["method"])
 				domain = Spread._get_message_link_domain(data=post,method=post["method"])
-				if url is not None:
-					url = LinkCleaner().single_clean_url(url)
-					url = LinkCleaner().sanitize_url_prefix(url)
-					if (url,actor) not in batch_insert:
-						batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
-											"actor":actor,"actor_label":actor_label,"platform":platform,
-											"message_ids":[],"actor_platform":actor_platform,"domain":domain}
-					batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
-					if len(batch_insert) >= 10000:
-						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
-						batch_insert = {}
-					if count % 1000 == 0:
-						print ("actor loop " + str(count))
+				if actor_username in actor_aliases and platform_type in actor_aliases[actor_username]:
+					actor = actor_aliases[actor_username][platform_type]
+					actor_platform = str(actor)+"_"+str(platform_type)
+					actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+				elif actor_id in actor_aliases and platform_type in actor_aliases[actor_id]:
+					actor = actor_aliases[actor_id][platform_type]
+					actor_platform = str(actor)+"_"+platform_type
+					actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+				else:
+					actor = actor_username
+					actor_platform = str(actor_username)+"_"+platform_type
+					actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+				if actor_platform is not None and actor_platform not in batch_insert:
+					batch_insert[actor_platform]={"url":url,"actor_username":actor_username,
+										"actor":actor,"actor_label":actor_label,"platform":platform,
+										"post_obj_ids":[],"actor_platform":actor_platform,"domain":domain}
+				batch_insert[actor_platform]["post_obj_ids"].append(post_obj_id)
+				if len(batch_insert) >= 10000:
+					mdb.write_many(actor_db,list(batch_insert.values()),key_col="actor_platform",sub_mapping="post_obj_ids")
+					batch_insert = {}
+				if count % 100000 == 0:
+					print ("actor loop " + str(count))
 	if len(batch_insert) > 0:
-		self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
-	net_db.create_index([ ("actor", -1) ])
+		mdb.write_many(actor_db,list(batch_insert.values()),key_col="actor_platform",sub_mapping="post_obj_ids")
+	actor_db.create_index([ ("actor", -1) ])
 
-def get_agg_actor_metrics(actors):
+def aggregate_actor_data(args):
 
-	agg_data = {}
+	actor_batch = args[0]
+	actor_info = args[1]
+	actor_data = []
 	mdb = MongoSpread()
-	first_it = True
-	for actor in actors:
-		try:
-			actor_url_docs = mdb.database["url_bi_network"].find({"actor":actor},no_cursor_timeout=True).sort("actor_platform",-1)
-			for actor_url in actor_url_docs:
-				unique_actor = actor_url["actor_platform"]
-				if unique_actor not in agg_data or first_it:
-					if not first_it:
+	for actor, poids in actor_batch.items():
+		most_popular_url_shared = defaultdict(int)
+		unique_domains = set([])
+		most_often_shared_domain = []
+		posts = set([])
+		langs = []
+		interactions = []
+		text_lengths = []
+		post_dates = []
+		followers = []
+		for poid in poids:
+			post_doc = mdb.database["post"].find_one({"_id":poid})
+			langs.append(Spread._get_lang(data=post_doc,method=post_doc["method"],model=lang_model))
+			interactions.append(Spread._get_interactions(data=post_doc,method=post_doc["method"]))
+			text_lengths.append(len(Spread._get_message_text(data=post_doc,method=post_doc["method"])))
+			post_dates.append(Spread._get_date(data=post_doc,method=post_doc["method"]))
+			followers.append(Spread._get_followers(data=post_doc,method=post_doc["method"]))
+			platform = Spread._get_platform(data=post_doc,method=post_doc["method"])
+			account_type = Spread._get_account_type(data=post_doc,method=post_doc["method"])
+			account_category = Spread._get_account_category(data=post_doc,method=post_doc["method"])
+			link_to_actor = Spread._get_link_to_actor(data=post_doc,method=post_doc["method"])
+		if len(most_popular_url_shared) > 0:
+			most_poluar_url = sorted(most_popular_url_shared.items(), key = itemgetter(1), reverse=True)[0][0]
+			most_shared_domain = max(most_often_shared_domain, key = most_often_shared_domain.count)
+		else:
+			most_poluar_url = None
+			most_shared_domain = None
+		actor_doc = {  "actor_name":actor_info[actor]["actor_label"],
+						"actor":actor_info[actor]["actor"],
+						"actor_username":actor_info[actor]["actor_username"],
+						"most_popular_url_shared":most_poluar_url,
+						"n_unique_domains_shared":len(unique_domains),
+						"most_often_shared_domain":most_shared_domain,
+						"n_posts":len(posts),
+						"lang":max(langs, key = langs.count),
+						"interactions_mean":np.nanmean(np.array(interactions,dtype=np.float64)),
+						"interactions_std":np.nanstd(np.array(interactions,dtype=np.float64)),
+						"message_length_mean":np.nanmean(np.array(text_lengths,dtype=np.float64)),
+						"message_length_std":np.nanstd(np.array(text_lengths,dtype=np.float64)),
+						"first_post_observed":min([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
+						"last_post_observed":max([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
+						"followers_mean":np.nanmean(np.array(followers,dtype=np.float64)),
+						"followers_max":np.nanmax(np.array(followers,dtype=np.float64)),
+						"platform":platform,
+						"account_type":account_type,
+						"account_category":account_category,
+						"link_to_actor":link_to_actor,
+						}
+		actor_data.append(actor_doc)
+		mdb.close()
+	return actor_data
 
-						actor_data = {  "actor_name":prev_ua_doc["actor_label"],
-										"actor_unique":prev_ua_doc["actor_platform"],
-										"actor_username":prev_ua_doc["actor_username"],
-										"actor":actor,
-										"most_popular_url_shared":sorted(most_popular_url_shared.items(), key = itemgetter(1), reverse=True)[0][0],
-										"n_unique_domains_shared":len(unique_domains),
-										"most_often_shared_domain":max(most_often_shared_domain, key = most_often_shared_domain.count),
-										"n_posts":len(posts),
-										"lang":max(langs, key = langs.count),
-										"interactions_mean":np.nanmean(np.array(interactions,dtype=np.float)),
-										"interactions_std":np.nanstd(np.array(interactions,dtype=np.float)),
-										"message_length_mean":np.nanmean(np.array(text_lengths,dtype=np.float)),
-										"message_length_std":np.nanstd(np.array(text_lengths,dtype=np.float)),
-										"first_post_observed":min([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
-										"last_post_observed":max([hlp.to_default_date_format(d) for d in post_dates if d is not None]),
-										"followers_mean":np.nanmean(np.array(followers,dtype=np.float)),
-										"followers_max":np.nanmax(np.array(followers,dtype=np.float)),
-										"platform":platform,
-										"account_type":account_type,
-										"account_category":account_category,
-										"link_to_actor":link_to_actor,
-										}
 
-						net_label_data = mdb.database["url_bi_network_coded"].find_one({"uentity":actor,"entity_type":"actor"})
-						if net_label_data is not None:
-							actor_data.update(dict(net_label_data["main_category"]))
-							actor_data["min_distance_to_0"]=net_label_data["distance_to_0"]
-						agg_data[prev_ua_doc["actor_platform"]]=actor_data
-					else:
-						pass
+def update_agg_actor_metrics(num_cores=8):
 
-					most_popular_url_shared = defaultdict(int)
-					unique_domains = set([])
-					most_often_shared_domain = []
-
-					posts = set([])
-					langs = []
-					interactions = []
-					text_lengths = []
-					post_dates = []
-					followers = []
-
-				most_popular_url_shared[actor_url["url"]]+=1
-				unique_domains.add(actor_url["domain"])
-				most_often_shared_domain.append(actor_url["domain"])
-				for pid in list(actor_url["message_ids"]):
-					posts.add(pid)
-					post_doc = mdb.database["post"].find_one({"message_id":pid})
-					langs.append(Spread._get_lang(data=post_doc,method=post_doc["method"],model=lang_model))
-					interactions.append(Spread._get_interactions(data=post_doc,method=post_doc["method"]))
-					text_lengths.append(len(Spread._get_message_text(data=post_doc,method=post_doc["method"])))
-					post_dates.append(Spread._get_date(data=post_doc,method=post_doc["method"]))
-					followers.append(Spread._get_followers(data=post_doc,method=post_doc["method"]))
-					platform = Spread._get_platform(data=post_doc,method=post_doc["method"])
-					account_type = Spread._get_account_type(data=post_doc,method=post_doc["method"])
-					account_category = Spread._get_account_category(data=post_doc,method=post_doc["method"])
-					link_to_actor = Spread._get_link_to_actor(data=post_doc,method=post_doc["method"])
-
-				prev_ua_doc = actor_url
-				first_it = False
-		except:
-			print ("CURSOR FAIL!")
+	mdb = MongoSpread()
+	pool = Pool(num_cores)
+	batch_size = 3000*num_cores
+	actor_count = 0
+	actor_metric_db = mdb.database["actor_metric"]
+	actor_platform_db = mdb.database["actor_platform_post"]
+	actor_metric_db.drop()
+	actor_platform = True
+	cur = actor_platform_db.find({})
+	batch_insert = {}
+	actor_info = {}
+	while actor_platform is not None:
+		actor_platform = next(cur,None)
+		if actor_platform is not None:
+			unique_actor = actor_platform["actor_platform"]
+			actor_count += 1
+			batch_insert[unique_actor]=list(actor_platform["post_obj_ids"])
+			actor_info[unique_actor]={"actor_username":actor_platform["actor_username"],
+										"actor_label":actor_platform["actor_label"],
+										"actor":actor_platform["actor"]}
+		if len(batch_insert) >= batch_size or actor_platform is None:
+			chunked_batches = [(l,actor_info) for l in hlp.chunks_optimized(batch_insert,num_cores)]
+			results = pool.map(aggregate_actor_data,chunked_batches)
+			for result in results:
+				mdb.write_many(actor_metric_db,result,key_col="actor_platform")
+			batch_insert = {}
+			actor_info = {}
+		if actor_count % 1000 == 0:
+			print ("actor loop " + str(actor_count))
 	mdb.close()
-	return agg_data
 
 def filter_docs(args):
 
@@ -484,7 +504,6 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 			second_degree_queries.append({"actor":_factor,"platform":{"$in":only_platforms}})
 		results = pool.map(query_multi,[("url_bi_network",l) for l in hlp.chunks(second_degree_queries,int(len(second_degree_queries)/num_cores)+1)])
 		for result in results:
-			print (len(result))
 			for fdocs in pool.map(filter_docs,[(l,"url",between_dates) for l in hlp.chunks(list(result),int(len(list(result))/num_cores)+1)]):
 				binet = add_data_to_net(fdocs,binet,has_been_queried_first_degree,"url",extra="actor")
 	del results
@@ -748,4 +767,6 @@ def update_actor_data(actors=[],extra_data=None,extra_data_key="actor"):
 	return all_actor_data
 
 if __name__ == "__main__":
+	#update_actor_message()
+	update_agg_actor_metrics()
 	sys.exit()

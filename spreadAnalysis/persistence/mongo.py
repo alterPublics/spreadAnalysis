@@ -272,8 +272,9 @@ class MongoSpread(MongoDatabase):
 						"domain_url":("input","url"),
 						"alias":"actor",
 						"url_bi_network":("url","actor_platform"),
-						"url_bi_network2":("url","actor_platform"),
-						"url_bi_network_coded":"uentity"  }
+						"url_bi_network_coded":"uentity",
+						"actor_platform_post":"actor_platform",
+						"actor_metric":"actor_platform"  }
 
 	table_idx_cols = {   }
 
@@ -491,21 +492,17 @@ class MongoSpread(MongoDatabase):
 
 		aliases = self.get_aliases()
 		actor_aliases = self.get_actor_aliases(platform_sorted=False)
-		url_post_db = self.database["url_post"]
 		post_db = self.database["post"]
-		cur = url_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
-		#print (url_post_db.count_documents({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}))
-		next_url_post = True
+		cur = post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]})
+		next_post = True
 		batch_insert = {}
 		seen_ids = set([])
 		count = 0
-		while next_url_post is not None:
+		while next_post is not None:
 			count += 1
-			next_url_post = next(cur, None)
-			if next_url_post is not None:
-				url = next_url_post["input"]
-				seen_ids.add(next_url_post["message_id"])
-				post = post_db.find_one({"message_id":next_url_post["message_id"]})
+			next_post = next(cur, None)
+			if next_post is not None:
+				post = next_post
 				url = Spread._get_message_link(data=post,method=post["method"])
 				if url is not None:
 					url = LinkCleaner().single_clean_url(url)
@@ -532,47 +529,21 @@ class MongoSpread(MongoDatabase):
 											"actor":actor,"actor_label":actor_label,"platform":platform,
 											"message_ids":[],"actor_platform":actor_platform,"domain":domain}
 					batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
+					for extra_url in Spread._get_all_external_message_links(data=post,method=post["method"]):
+						extra_url = LinkCleaner().single_clean_url(extra_url)
+						extra_url = LinkCleaner().sanitize_url_prefix(extra_url)
+						if extra_url != url and not LinkCleaner().is_url_domain(extra_url):
+							if (extra_url,actor) not in batch_insert:
+								batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
+													"actor":actor,"actor_label":actor_label,"platform":platform,
+													"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+							batch_insert[(extra_url,actor)]["message_ids"].append(post["message_id"])
+
 					if len(batch_insert) >= 10000:
 						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 						batch_insert = {}
 					if count % 1000 == 0:
-						print ("url loop " + str(count))
-		if len(batch_insert) > 0:
-			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
-
-		actor_post_db = self.database["actor_post"]
-		cur = actor_post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]}).sort("input",-1)
-		next_actor_post = True
-		batch_insert = {}
-		count = 0
-		while next_actor_post is not None:
-			count += 1
-			next_actor_post = next(cur, None)
-			if next_actor_post is not None:
-				message_id = next_actor_post["message_id"]
-				actor = next_actor_post["input"]
-				if not message_id in seen_ids:
-					post = post_db.find_one({"message_id":message_id})
-					platform = Spread._get_platform(data=post,method=post["method"])
-					platform_type = Spread._get_platform_type(data=post,method=post["method"])
-					actor_username = Spread._get_actor_username(data=post,method=post["method"])
-					actor_platform = str(actor)+"_"+str(platform_type)
-					actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
-					url = Spread._get_message_link(data=post,method=post["method"])
-					domain = Spread._get_message_link_domain(data=post,method=post["method"])
-					if url is not None:
-						url = LinkCleaner().single_clean_url(url)
-						url = LinkCleaner().sanitize_url_prefix(url)
-						if (url,actor) not in batch_insert:
-							batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
-												"actor":actor,"actor_label":actor_label,"platform":platform,
-												"message_ids":[],"actor_platform":actor_platform,"domain":domain}
-						batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
-						if len(batch_insert) >= 10000:
-							self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
-							batch_insert = {}
-						if count % 1000 == 0:
-							print ("actor loop " + str(count))
+						print ("post loop " + str(count))
 		if len(batch_insert) > 0:
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 		net_db.create_index([ ("actor", -1) ])
@@ -612,14 +583,14 @@ class MongoSpread(MongoDatabase):
 def test():
 
 	m = MongoSpread()
-	#m.update_url_bi_network(new=False)
+	m.update_url_bi_network(new=True)
 	#m.bi_to_uni_net("url","actor")
-	updates = []
+	"""updates = []
 	for d in m.database["actor_post"].aggregate([{"$match":{"input":"Kontrast"}},{"$lookup":{"from":"post","localField":"message_id","foreignField":"message_id","as":"message_dat"}},{"$project":{"input":1,"message_dat.method":1,"message_id":1}}]):
 		if d["message_dat"][0]["method"] == "twitter2":
 			updates.append(UpdateOne({"input":"Kontrast","message_id":d["message_id"]},
 						{'$set': {"input":"KontrastDK","message_id":d["message_id"]}}))
-	#m.database["actor_post"].bulk_write(updates)
+	#m.database["actor_post"].bulk_write(updates)"""
 
 
 if __name__ == '__main__':

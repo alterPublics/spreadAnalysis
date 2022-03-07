@@ -232,6 +232,14 @@ class LinkUtils:
 				special_url = self.extract_instagram_url(url)
 			elif "reddit." in url:
 				special_url = self.extract_reddit_url(url)
+			elif "t.me/" in url:
+				special_url = "https://t.me/"+self.extract_username(url)
+			elif "tiktok." in url:
+				special_url = "https://t.me/"+self.extract_username(url,with_unpack=False)
+			elif "gab.com/" in url:
+				special_url = "https://t.me/"+self.extract_username(url)
+			elif "vk.com/" in url:
+				special_url = "https://t.me/"+self.extract_username(url)
 			else:
 				special_url = self.extract_domain(full_url)
 		else:
@@ -391,7 +399,7 @@ class LinkCleaner(LinkUtils):
 		url_list = self.get_clean_urls(input_text)
 		return url_list
 
-	def extract_username(self,url,never_none=False):
+	def extract_username(self,url,never_none=False,with_unpack=True):
 
 		username = None
 		url = str(url)
@@ -425,7 +433,8 @@ class LinkCleaner(LinkUtils):
 			if "/" in username: username = username.split("/")[0]
 		elif "tiktok." in url:
 			if "@" not in url:
-				url = self.unpack_url(url,force_unpack=False)[0]
+				if with_unpack:
+					url = self.unpack_url(url,force_unpack=False)[0]
 			username = url.split("tiktok.")[-1].split("/")[1].split("?")[0].\
 				replace("@","")
 			if "/" in username: username = username.split("/")[0]
