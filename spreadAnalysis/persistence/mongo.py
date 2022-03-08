@@ -478,6 +478,7 @@ class MongoSpread(MongoDatabase):
 		net_db = self.database["url_bi_network"]
 		try:
 			net_db.drop_index('actor_-1')
+			net_db.drop_index('domain_-1')
 		except:
 			pass
 		if new:
@@ -551,6 +552,7 @@ class MongoSpread(MongoDatabase):
 		if len(batch_insert) > 0:
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 		net_db.create_index([ ("actor", -1) ])
+		net_db.create_index([ ("domain", -1) ])
 
 	def bi_to_uni_net_OLD(self,node1,node2):
 
@@ -587,7 +589,7 @@ class MongoSpread(MongoDatabase):
 def test():
 
 	m = MongoSpread()
-	m.update_url_bi_network(new=True)
+	m.update_url_bi_network(new=False)
 	#m.bi_to_uni_net("url","actor")
 	"""updates = []
 	for d in m.database["actor_post"].aggregate([{"$match":{"input":"Kontrast"}},{"$lookup":{"from":"post","localField":"message_id","foreignField":"message_id","as":"message_dat"}},{"$project":{"input":1,"message_dat.method":1,"message_id":1}}]):

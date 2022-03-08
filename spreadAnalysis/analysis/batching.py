@@ -191,7 +191,7 @@ def update_agg_actor_metrics(num_cores=10):
 	actor_count = 0
 	actor_metric_db = mdb.database["actor_metric"]
 	actor_platform_db = mdb.database["actor_platform_post"]
-	actor_metric_db.drop()
+	#actor_metric_db.drop()
 	actor_platform = True
 	batch_insert = {}
 	actor_info = {}

@@ -54,7 +54,7 @@ def read(filename, column_of_interest, triangular_input = False, consider_self_l
 	else:
 		return table, original_nodes, original_edges
 
-def thresholding(table, threshold, keep_percent=None):
+def thresholding(table, threshold, keep_percent=None, visualize_max=1000000):
 	"""Reads a preprocessed edge table and returns only the edges supassing a significance threshold.
 
 	Args:
@@ -66,7 +66,13 @@ def thresholding(table, threshold, keep_percent=None):
 	"""
 	table = table.copy()
 	if keep_percent is not None:
-		return table.nlargest(int(len(table)*keep_percent),"score")[["src", "trg", "nij", "score"]]
+		table["score"] = table["score"] - (float(threshold) * table["sdev_cij"])
+		keep_table = table.nlargest(int(len(table)*keep_percent),"score")[["src", "trg", "nij", "score"]]
+		if visualize_max is not None and len(keep_table) > visualize_max:
+			while len(keep_table) > visualize_max:
+				keep_percent = keep_percent*0.5
+				keep_table = table.nlargest(int(len(table)*keep_percent),"score")[["src", "trg", "nij", "score"]]
+		return keep_table
 	if "sdev_cij" in table:
 		return table[(table["score"] - (float(threshold) * table["sdev_cij"])) > 0][["src", "trg", "nij", "score"]]
 	else:
