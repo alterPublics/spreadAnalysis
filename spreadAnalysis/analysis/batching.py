@@ -116,7 +116,10 @@ def aggregate_actor_data(args):
 	actor_info = args[1]
 	actor_data = []
 	mdb = MongoSpread()
+	actor_count = 0
 	for actor, poids in actor_batch.items():
+		actor_count+=1
+		#print (actor + " - " + str(actor_count) + " - " + str(len(poids)))
 		most_popular_url_shared = defaultdict(int)
 		unique_domains = set([])
 		most_often_shared_domain = []
@@ -184,8 +187,7 @@ def update_agg_actor_metrics(num_cores=10):
 	warnings.filterwarnings('ignore')
 	np.seterr(all="ignore")
 	mdb = MongoSpread()
-	pool = Pool(num_cores)
-	batch_size = 1000*num_cores
+	batch_size = 3000*num_cores
 	actor_count = 0
 	actor_metric_db = mdb.database["actor_metric"]
 	actor_platform_db = mdb.database["actor_platform_post"]
@@ -203,8 +205,12 @@ def update_agg_actor_metrics(num_cores=10):
 	else:
 		max_upd_date = max_upd_date[0]["updated_at"]
 	max_upd_date = max_upd_date-timedelta(days=1)
-	for actor_platform in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},no_cursor_timeout=True):
+	actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
+	random.shuffle(actor_obj_ids)
+	for a_obj in actor_obj_ids:
+	#for actor_platform in actor_platform_db.find():
 		#actor_platform = next(cur,None)
+		actor_platform = actor_platform_db.find_one({"_id":a_obj})
 		if actor_platform is not None:
 			unique_actor = actor_platform["actor_platform"]
 			actor_count += 1
@@ -214,6 +220,7 @@ def update_agg_actor_metrics(num_cores=10):
 										"actor":actor_platform["actor"]}
 		if len(batch_insert) >= batch_size or actor_platform is None:
 			if num_cores > 1:
+				pool = Pool(num_cores)
 				chunked_batches = [(l,actor_info) for l in hlp.chunks_optimized(batch_insert,num_cores)]
 				results = pool.map(aggregate_actor_data,chunked_batches)
 			else:
