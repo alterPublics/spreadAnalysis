@@ -193,7 +193,7 @@ class MongoDatabase:
 							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
 								new_mapping = set(doc[sub_mapping])
 								new_mapping.update(set(old_doc[sub_mapping]))
-								doc[sub_mapping]=list(new_mapping)
+								doc[sub_mapping]=new_mapping
 						bulks.append(UpdateOne({key_col[0]:doc[key_col[0]],key_col[1]: doc[key_col[1]]},
 									{'$set': doc}))
 					else:
@@ -211,7 +211,7 @@ class MongoDatabase:
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
 								new_mapping.update(dict(old_doc[sub_mapping]))
-								doc[sub_mapping]=list(new_mapping)
+								doc[sub_mapping]=new_mapping
 							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
 								new_mapping = set(doc[sub_mapping])
 								new_mapping.update(set(old_doc[sub_mapping]))
@@ -553,8 +553,8 @@ class MongoSpread(MongoDatabase):
 					if len(batch_insert) >= 10000:
 						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 						batch_insert = {}
-					if count % 100000 == 0:
-						print ("post loop " + str(count))
+				if count % 100000 == 0:
+					print ("post loop " + str(count))
 		if len(batch_insert) > 0:
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 		net_db.create_index([ ("actor", -1) ])
