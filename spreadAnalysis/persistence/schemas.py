@@ -14,6 +14,13 @@ PLATFORM_TO_STR_ID = {"facebook":["facebook."],
 						"youtube":["youtube.","youtu.be"],
 						"vkontakte":["vk.com/"]}
 
+try:
+	import fasttext
+	conf = Config()
+	lang_model_gl = fasttext.load_model(conf.LANGDETECT_MODEL)
+except:
+	pass
+
 class Spread:
 
 	@staticmethod
@@ -497,6 +504,7 @@ class Spread:
 	def _get_lang(method=None,data=None,model=None):
 
 		_val = None
+		if model is None: model = lang_model_gl
 		if method=="crowdtangle":
 			if "languageCode" in data:
 				_val = str(data["languageCode"])

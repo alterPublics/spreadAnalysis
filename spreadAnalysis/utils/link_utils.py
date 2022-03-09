@@ -216,15 +216,11 @@ class LinkUtils:
 				try:
 					special_url = self.extract_facebook_url(url)
 				except:
-					print ("ERROR")
-					print (url)
 					special_url = self.extract_domain(full_url)
 			elif "youtube." in url or "youtu.be" in url:
 				try:
 					special_url = self.extract_youtube_url(url)
 				except:
-					print ("ERROR")
-					print (url)
 					special_url = self.extract_domain(full_url)
 			elif "twitter." in url:
 				special_url = self.extract_twitter_url(url)
@@ -235,11 +231,11 @@ class LinkUtils:
 			elif "t.me/" in url:
 				special_url = "https://t.me/"+self.extract_username(url)
 			elif "tiktok." in url:
-				special_url = "https://t.me/"+self.extract_username(url,with_unpack=False)
+				special_url = "https://tiktok.me/"+self.extract_username(url,with_unpack=False)
 			elif "gab.com/" in url:
-				special_url = "https://t.me/"+self.extract_username(url)
+				special_url = "https://gab.com/"+self.extract_username(url)
 			elif "vk.com/" in url:
-				special_url = "https://t.me/"+self.extract_username(url)
+				special_url = "https://vk.com/"+self.extract_username(url)
 			else:
 				special_url = self.extract_domain(full_url)
 		else:
