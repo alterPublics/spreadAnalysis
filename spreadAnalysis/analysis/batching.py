@@ -210,7 +210,7 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False):
 	random.shuffle(actor_obj_ids)
 	for a_obj in actor_obj_ids:
 		actor_count += 1
-		if actor_count % 1000 == 0:
+		if actor_count % 10000 == 0:
 			print ("actor loop " + str(actor_count))
 		actor_platform = actor_platform_db.find_one({"_id":a_obj})
 		if skip_existing:
@@ -233,7 +233,7 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False):
 				pool.join()
 			else:
 				results = [aggregate_actor_data((batch_insert,actor_info,0))]
-			print ("inserting")
+			#print ("inserting")
 			for result in results:
 				mdb.write_many(actor_metric_db,result,key_col="actor_platform")
 			batch_insert = {}

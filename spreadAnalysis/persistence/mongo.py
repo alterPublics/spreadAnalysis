@@ -210,6 +210,8 @@ class MongoDatabase:
 							old_doc = db.find_one({key_col:doc[key_col]})
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
+								print (dict(old_doc[sub_mapping]))
+								print (new_mapping)
 								new_mapping.update(dict(old_doc[sub_mapping]))
 								doc[sub_mapping]=list(new_mapping)
 							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
@@ -553,7 +555,7 @@ class MongoSpread(MongoDatabase):
 					if len(batch_insert) >= 10000:
 						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 						batch_insert = {}
-					if count % 1000 == 0:
+					if count % 100000 == 0:
 						print ("post loop " + str(count))
 		if len(batch_insert) > 0:
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
