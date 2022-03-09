@@ -210,7 +210,7 @@ class MongoDatabase:
 							old_doc = db.find_one({key_col:doc[key_col]})
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
-								print (dict(old_doc[sub_mapping]))
+								print (old_doc[sub_mapping])
 								print (new_mapping)
 								new_mapping.update(dict(old_doc[sub_mapping]))
 								doc[sub_mapping]=list(new_mapping)
