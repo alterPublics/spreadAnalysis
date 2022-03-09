@@ -189,7 +189,7 @@ class MongoDatabase:
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
 								new_mapping.update(dict(old_doc[sub_mapping]))
-							else:
+							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
 								new_mapping = set(doc[sub_mapping])
 								new_mapping.update(set(old_doc[sub_mapping]))
 							doc[sub_mapping]=list(new_mapping)
@@ -207,11 +207,10 @@ class MongoDatabase:
 						doc["updated_at"]=datetime.now()
 						if sub_mapping is not None:
 							old_doc = db.find_one({key_col:doc[key_col]})
-							print (old_doc)
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
 								new_mapping.update(dict(old_doc[sub_mapping]))
-							else:
+							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
 								new_mapping = set(doc[sub_mapping])
 								new_mapping.update(set(old_doc[sub_mapping]))
 							doc[sub_mapping]=list(new_mapping)
