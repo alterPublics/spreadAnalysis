@@ -15,6 +15,6 @@ if __name__ == "__main__":
 	btc.update_actor_message(new=False)
 	print("--- %s seconds --- to update actor messages" % (time.time() - start_time))
 	start_time = time.time()
-	btc.update_agg_actor_metrics(new=False,num_cores=8)
+	btc.update_agg_actor_metrics(skip_existing=False,num_cores=8)
 	print("--- %s seconds --- to update actor metrics" % (time.time() - start_time))
 	print("--- %s seconds --- to run entire update" % (time.time() - all_time))

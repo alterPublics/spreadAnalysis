@@ -189,11 +189,11 @@ class MongoDatabase:
 							if isinstance(doc[sub_mapping],dict) and sub_mapping in old_doc:
 								new_mapping = dict(doc[sub_mapping])
 								new_mapping.update(dict(old_doc[sub_mapping]))
-								doc[sub_mapping]=list(new_mapping)
+								doc[sub_mapping]=new_mapping
 							elif isinstance(doc[sub_mapping],set) or isinstance(doc[sub_mapping],list):
 								new_mapping = set(doc[sub_mapping])
 								new_mapping.update(set(old_doc[sub_mapping]))
-								doc[sub_mapping]=new_mapping
+								doc[sub_mapping]=list(new_mapping)
 						bulks.append(UpdateOne({key_col[0]:doc[key_col[0]],key_col[1]: doc[key_col[1]]},
 									{'$set': doc}))
 					else:
@@ -500,7 +500,6 @@ class MongoSpread(MongoDatabase):
 			elif "inserted_at" in max_net_date[0]:
 				max_net_date = max_net_date[0]["inserted_at"]
 			max_net_date = max_net_date-timedelta(days=1)
-
 		aliases = self.get_aliases()
 		actor_aliases = self.get_actor_aliases(platform_sorted=False)
 		post_db = self.database["post"]

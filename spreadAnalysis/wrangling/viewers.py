@@ -19,6 +19,20 @@ from spreadAnalysis.persistence.mongo import MongoSpread
 
 some_prefixes = ["facebook.","twitter.","vk.com","t.me"]
 
+def export_actor_to_pandas(file_path,query,net_name=None):
+
+    df = []
+    mdb = MongoSpread()
+    for actor_doc in mdb.database["actor_metric"].find(query):
+        if net_name is not None:
+            if "net_data" in actor_doc and net_name in actor_doc["net_data"]:
+                actor_doc.update(actor_doc["net_data"][net_name])
+        if "net_data" in actor_doc:
+            del actor_doc["net_data"]
+        df.append(actor_doc)
+
+    pd.DataFrame(df).to_csv(file_path,index=False)
+
 def show_url_disparities():
 
     mdb = MongoSpread()
@@ -88,6 +102,7 @@ def show_some_accounts_in_db(main_path,some="Telegram"):
                                 print ("ERROR")
                                 #print (tm)
                             print (tel_username)
+                            if some == "TikTok" and len(tel_username) >= 30: continue
                             if tel_username not in prev_telegram_actors:
                                 row_count+=1
                                 new_data.append({some:tel_username,"row":row_count})

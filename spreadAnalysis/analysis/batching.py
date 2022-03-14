@@ -225,7 +225,7 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False):
 										"actor":actor_platform["actor"]}
 		if len(batch_insert) >= batch_size or actor_platform is None:
 			if num_cores > 1:
-				chunked_batches = [(l,actor_info,i) for i,l in enumerate(hlp.chunks_optimized(batch_insert,num_cores,verbose=True))]
+				chunked_batches = [(l,actor_info,i) for i,l in enumerate(hlp.chunks_optimized(batch_insert,num_cores,verbose=False))]
 				pool = Pool(num_cores)
 				#with get_context("spawn").Pool(num_cores) as pool:
 				results = pool.map(aggregate_actor_data,chunked_batches)
