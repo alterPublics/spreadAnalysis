@@ -113,6 +113,11 @@ class Twitter2:
             next_token = self._get_next_token(res)
             if max_results is not None and len(data["output"]) >= max_results:
                 break
+        if len(data["output"]) == 0:
+            #print (res.json())
+            if "detail" in res.json() and 'Too Many Requests' in res.json()["detail"]:
+                print ("TOO MANY TWITTER REQUESTS")
+                sys.exit()
         return data
 
     def actor_info(self,actors):

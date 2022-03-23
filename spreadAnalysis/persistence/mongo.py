@@ -77,11 +77,22 @@ from spreadAnalysis.utils.link_utils import LinkCleaner
 from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne
 from spreadAnalysis.persistence.schemas import Spread
 from spreadAnalysis.utils import helpers as hlp
+from spreadAnalysis.io.config_io import Config
+from spreadAnalysis.scraper.scraper import Scraper
 from multiprocessing import Pool, Manager
 import networkx as nx
 import time
 import sys
 import random
+
+def _multi_unpack_url(old_url):
+
+	conf = Config()
+	scrp = Scraper(settings={"change_user_agent":True,"exe_path":conf.CHROMEDRIVER})
+	scrp.browser_init()
+	new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
+
+	return new_url
 
 class MongoDatabase:
 
@@ -366,7 +377,7 @@ class MongoSpread(MongoDatabase):
 						aliases[d["alias"]][d["platform"]]=d["actor"]
 		return aliases
 
-	def update_custom_data(self,custom_path,custom_title=None,with_del=True,files_key_cols=None):
+	def update_custom_data(self,custom_path,custom_title=None,with_del=True,files_key_cols=None,override=False):
 
 		# !!! Function is missing a check for unique actors in Actor column.
 		# Import requires a unique Actor designation in the column
@@ -391,7 +402,7 @@ class MongoSpread(MongoDatabase):
 			cols = actor_df.columns
 			actor_docs = [{col:row[col] for col in cols} for i,row in actor_df.iterrows()]
 			for d in actor_docs:
-				if d[key_col] in prev_ids and d["org_project_title"] != custom_title:
+				if d[key_col] in prev_ids and d["org_project_title"] != custom_title and not override:
 					print ("found duplicate actor. {}. aborting.".format(d[key_col]))
 					sys.exit()
 
@@ -544,6 +555,7 @@ class MongoSpread(MongoDatabase):
 						extra_url = LinkCleaner().sanitize_url_prefix(extra_url)
 						if extra_url != url and not LinkCleaner().is_url_domain(extra_url):
 							if (extra_url,actor) not in batch_insert:
+								domain = LinkCleaner().extract_special_url(extra_url)
 								batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
 													"actor":actor,"actor_label":actor_label,"platform":platform,
 													"message_ids":[],"actor_platform":actor_platform,"domain":domain}
@@ -559,44 +571,110 @@ class MongoSpread(MongoDatabase):
 		net_db.create_index([ ("actor", -1) ])
 		net_db.create_index([ ("domain", -1) ])
 
-	def bi_to_uni_net_OLD(self,node1,node2):
+	def update_clean_urls(self,shorten_domains,num_cores=12):
 
-		net_db = self.database["url_bi_network"]
-		cur = net_db.find({}).sort("url",-1).limit(1000000)
-		url_actor = True
-		net_data = {}
-		while url_actor is not None:
-			url_actor = next(cur, None)
-			if url_actor is not None:
-				if url_actor["actor"] is not None and url_actor["url"] is not None:
-					if url_actor["url"] not in net_data:
-						net_data[url_actor["url"]]=[]
-					net_data[url_actor["url"]].append([url_actor["actor"],len(url_actor["message_ids"])])
-		start_time = time.time()
-		num_cores = 6
-		N = num_cores
-		S = int(len(net_data)/N)
-		net_data = list(hlp.chunks_optimized(net_data,n_chunks=num_cores))
-		#net_data = [ net_data.iloc[i*S:(i+1)*S] for i in range(N) ]
+		cleaned_urls = {d["url"]:d["clean_url"] for d in self.database["clean_url"].find({})}
+		updates = []
+		url_count = 0
+		conf = Config()
+		inter_short_urls = set([])
 		pool = Pool(num_cores)
-		rep_data = {}
-		results = pool.map(bi_to_uni,net_data)
-		print("--- %s seconds --- for num cores {0} to reproject data".format(num_cores) % (time.time() - start_time))
-		start_time = time.time()
-		g = nx.Graph()
-		for result in results:
-			for k_tup, w in result.items():
-				g = add_node_and_edges(g,k_tup[0],k_tup[1],w)
-		print (len(g.nodes()))
-		print (len(g.edges()))
-		print("--- %s seconds --- to build network" % (time.time() - start_time))
+		insert_new_clean_count = 0
+		for dom in shorten_domains:
+			updates = []
+			for url_d in self.database["url_bi_network"].find({"domain":dom}):
+				url_count+=1
+				old_url = url_d["url"]
+				print (old_url)
+				if old_url in cleaned_urls:
+					new_url = cleaned_urls[old_url]
+					updates.append(UpdateOne({"url":old_url},
+								{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}))
+				else:
+					#scrp = Scraper(settings={"change_user_agent":True,"exe_path":conf.CHROMEDRIVER})
+					#scrp.browser_init()
+					#new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
+					inter_short_urls.add(old_url)
+					if len(inter_short_urls) == num_cores:
+						results = pool.map(_multi_unpack_url,list(inter_short_urls))
+						for new_url in results:
+							if new_url is not None and not isinstance(new_url,list):
+								new_url = new_url["unpacked"]
+								new_url = LinkCleaner().single_clean_url(new_url)
+								new_url = LinkCleaner().sanitize_url_prefix(new_url)
+								if not LinkCleaner().is_url_domain(new_url):
+									cleaned_urls.update({old_url:new_url})
+									self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
+									insert_new_clean_count+=1
+									print (new_url)
+									updates.append(UpdateOne({"url":old_url},
+												{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}))
+							else:
+								continue
+						inter_short_urls = set([])
+						print ("")
+						print ("")
+						print ("")
+				if insert_new_clean_count > 100:
+					print (insert_new_clean_count)
+					insert_new_clean_count=0
+				#if url_count > 7:
+			if len(updates) > 0:
+				self.database["url_bi_network"].bulk_write(updates)
 
 def test():
 
+	#old_url = "https://nyti.ms/2QPPA7u"
+	#new_url = LinkCleaner().clean_url(old_url,with_unpack=True,force_unpack=True)
+	#print (new_url)
+	#sys.exit()
+
 	m = MongoSpread()
-	m.update_url_bi_network(new=False)
+
+	#m.update_url_bi_network(new=False)
 	#m.bi_to_uni_net("url","actor")
-	"""updates = []
+	#shorten_domains = ["dlvr.it"]
+	shorten_domains = pd.read_csv("/home/alterpublics/projects/full_test/url_shorteners.csv")
+	shorten_domains = list(set([row["domain"] for i,row in shorten_domains.iterrows()]))
+	"""try_count = 0
+	all_urls = set([])
+	for dom in shorten_domains:
+		for url_d in m.database["url_bi_network"].find({"domain":dom}):
+			all_urls.add(url_d["url"])
+	print (len(all_urls))
+	sys.exit()"""
+	shorten_domains = ["dlvr.it"]
+	try_count = 0
+	while True:
+		try:
+			m.update_clean_urls(shorten_domains)
+		except Exception as e:
+			try_count+=1
+			print (e)
+			print ("sleeping for 20 seconds")
+			time.sleep(20)
+		if try_count > 300:
+			break
+	updates = []
+	count = 0
+	try:
+		m.database["url_bi_network"].drop_index('actor_-1')
+		m.database["url_bi_network"].drop_index('domain_-1')
+	except:
+		pass
+	for d in m.database["url_bi_network"].find():
+		count+=1
+		new_domain = LinkCleaner().extract_special_url(d["url"])
+		if new_domain != d["domain"]:
+			updates.append(UpdateOne({"url":d["url"]},
+						{'$set': {"domain":new_domain}}))
+		if count % 100000 == 0:
+			m.database["url_bi_network"].bulk_write(updates)
+			print (count)
+	m.database["url_bi_network"].create_index([ ("actor", -1) ])
+	m.database["url_bi_network"].create_index([ ("domain", -1) ])
+	sys.exit()
+	updates = []
 	for d in m.database["actor_post"].aggregate([{"$match":{"input":"Kontrast"}},{"$lookup":{"from":"post","localField":"message_id","foreignField":"message_id","as":"message_dat"}},{"$project":{"input":1,"message_dat.method":1,"message_id":1}}]):
 		if d["message_dat"][0]["method"] == "twitter2":
 			updates.append(UpdateOne({"input":"Kontrast","message_id":d["message_id"]},

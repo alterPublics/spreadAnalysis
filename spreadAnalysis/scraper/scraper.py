@@ -107,7 +107,6 @@ class Scraper(ScraperHelpers):
         if self.cookie_path is not None:
             pickle.dump(self.browser.get_cookies(), open(self.cookie_path+"/cooks_{0}.p".format(self.cookie_user), "wb"))
         self.browser.close()
-        time.sleep(5)
         self.browser.quit()
 
     def browser_reset(self,user_agent="",proxy=None):

@@ -63,6 +63,8 @@ class Spread:
 			_val = str(data["id"])
 		if method=="gab":
 			_val = str(data["id"])
+		if method=="fourchan":
+			_val = str(data["num"])+"_"+str(data["thread_num"])
 		return _val
 
 	@staticmethod
@@ -206,6 +208,8 @@ class Spread:
 			_val = str(data["date"])[:19]
 		if method=="gab":
 			_val = str(data["created_at"]).replace("T"," ").split(".")[0]
+		if method=="fourchan":
+			_val = str(datetime.fromtimestamp(int(data["timestamp"])))
 		return _val
 
 	@staticmethod
@@ -242,6 +246,8 @@ class Spread:
 			_val = str(data["author"]["id"])
 		if method=="gab":
 			_val = str(data["account"]["id"])
+		if method=="fourchan":
+			_val = str(data["thread_num"])
 
 		return _val
 
@@ -285,6 +291,8 @@ class Spread:
 			_val = str(data["author"]["uniqueId"])
 		if method=="gab":
 			_val = str(data["account"]["username"])
+		if method=="fourchan":
+			_val = str(data["thread_num"])
 
 		return _val
 
@@ -294,6 +302,7 @@ class Spread:
 		_val = None
 		if method=="crowdtangle":
 			_val = str(data["account"]["name"])
+			if len(str(_val)) < 1: _val = str(data["author"]["username"])
 		if method=="twitter2":
 			_val = str(data["author"]["name"])
 		if method=="crowdtangle_app":
@@ -321,6 +330,8 @@ class Spread:
 			_val = str(data["author"]["nickname"])
 		if method=="gab":
 			_val = str(data["account"]["display_name"])
+		if method=="fourchan":
+			_val = str(data["name"])
 
 		return _val
 
@@ -352,6 +363,8 @@ class Spread:
 		if method=="gab":
 			if "followers_count" in data:
 				_val = int(data["followers_count"])
+		if method=="fourchan":
+			_val = None
 
 		return _val
 
@@ -388,6 +401,8 @@ class Spread:
 			_val = "tiktok"
 		if method=="gab":
 			_val = "gab"
+		if method=="fourchan":
+			_val = "fourchan"
 
 		return _val
 
@@ -427,6 +442,8 @@ class Spread:
 			_val = "tiktok"
 		if method=="gab":
 			_val = "gab"
+		if method=="fourchan":
+			_val = "fourchan"
 
 		return _val
 
@@ -461,6 +478,8 @@ class Spread:
 			_val = "Tiktok"
 		if method=="gab":
 			_val = "Gab"
+		if method=="fourchan":
+			_val = "Fourchan"
 
 		return _val
 
@@ -497,6 +516,8 @@ class Spread:
 			_val = "https://www.tiktok.com/@{0}?".format(Spread._get_actor_username(data=data,method=method))
 		if method=="gab":
 			_val = data["account"]["url"]
+		if method=="fourchan":
+			_val = "https://boards.4channel.org/w/thread/{0}".format(str(data["thread_num"]))
 
 		return _val
 
@@ -535,6 +556,8 @@ class Spread:
 			_val = hlp.get_lang_and_conf(str(data["desc"])+" "+str(data["author"]["signature"]),model=model)["lang"]
 		if method=="gab":
 			_val = str(data["language"])
+		if method=="fourchan":
+			_val = hlp.get_lang_and_conf(Spread._get_message_text(data=data,method=method),model=model)["lang"]
 
 		return _val
 
@@ -577,6 +600,8 @@ class Spread:
 			_val = "tiktok"
 		if method=="gab":
 			_val = "gab"
+		if method=="fourchan":
+			_val = "fourchan"
 
 		return _val
 
@@ -625,6 +650,9 @@ class Spread:
 			for field in fields:
 				if field in data:
 					_val+=int(data[field])
+		if method=="reddit":
+			_val = int(data["op"])
+
 		return _val
 
 	def _get_angry(method=None,data=None):
@@ -673,6 +701,8 @@ class Spread:
 			_val = "https://www.tiktok.com/@any/video/{0}".format(Spread()._get_message_id(method=method,data=data))
 		if method=="gab":
 			_val = str(data["url"])
+		if method=="fourchan":
+			_val = "https://boards.4channel.org/w/thread/{0}#p{1}".format(str(data["thread_num"]),str(data["num"]))
 
 		return _val
 

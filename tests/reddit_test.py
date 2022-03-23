@@ -8,8 +8,9 @@ url = "https://konfront.dk/et-hvidt-tryghedshold-kalder-den-hvide-del-af-venstre
 url = "https://rt.com"
 url = "https://piopio.dk"
 url = "https://faktum-magazin.de"
-#data = rdit.url_referals(url,start_date="2017-06-01")
-data = rdit.domain_referals(url,start_date="2021-06-01")
+url = "https://www.youtube.com/watch?v=pQLcFs6H9NU"
+data = rdit.url_referals(url,start_date="2000-06-01")
+#data = rdit.domain_referals(url,start_date="2021-06-01")
 #print (data)
 #print (len(data))
 #print (len(data["output"]))

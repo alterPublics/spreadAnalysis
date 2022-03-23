@@ -30,9 +30,10 @@ url = "https://ec.europa.eu/health/sites/default/files/vaccination/docs/2019-202
 #print (len(data["output"]))
 #sys.exit()
 
-url = "https://vibekemanniche.dk"
-data = tw.domain_referals(url,start_date="2021-01-01")
+url = "https://denkorteavis.dk/"
+data = tw.domain_referals(url,start_date="2019-01-01",end_date="2021-04-04")
 print (data)
+print (len(data["output"]))
 sys.exit()
 
 for actor in actors:

@@ -211,34 +211,41 @@ class LinkUtils:
 
 		if full_url is None: return None
 		url = self.remove_url_prefix(full_url)
+		special_url = None
 		if "/" in url:
-			if "facebook." in url:
-				try:
-					special_url = self.extract_facebook_url(url)
-				except:
+			try:
+				if "facebook." in url:
+					try:
+						special_url = self.extract_facebook_url(url)
+					except:
+						special_url = self.extract_domain(full_url)
+				elif "youtube." in url or "youtu.be" in url:
+					try:
+						special_url = self.extract_youtube_url(url)
+					except:
+						special_url = self.extract_domain(full_url)
+				elif "twitter." in url:
+					special_url = self.extract_twitter_url(url)
+				elif "instagram." in url:
+					special_url = self.extract_instagram_url(url)
+				elif "reddit." in url:
+					special_url = self.extract_reddit_url(url)
+				elif "t.me/" in url:
+
+					special_url = "https://t.me/"+self.extract_username(url)
+				elif "tiktok." in url:
+					special_url = "https://tiktok.me/"+self.extract_username(url,with_unpack=False)
+				elif "/gab.com/" in url or ".gab.com/" in url:
+					special_url = "https://gab.com/"+self.extract_username(url)
+				elif "/vk.com/" in url or ".vk.com/"  in url:
+					special_url = "https://vk.com/"+self.extract_username(url)
+				else:
 					special_url = self.extract_domain(full_url)
-			elif "youtube." in url or "youtu.be" in url:
-				try:
-					special_url = self.extract_youtube_url(url)
-				except:
-					special_url = self.extract_domain(full_url)
-			elif "twitter." in url:
-				special_url = self.extract_twitter_url(url)
-			elif "instagram." in url:
-				special_url = self.extract_instagram_url(url)
-			elif "reddit." in url:
-				special_url = self.extract_reddit_url(url)
-			elif "t.me/" in url:
-				special_url = "https://t.me/"+self.extract_username(url)
-			elif "tiktok." in url:
-				special_url = "https://tiktok.me/"+self.extract_username(url,with_unpack=False)
-			elif "gab.com/" in url:
-				special_url = "https://gab.com/"+self.extract_username(url)
-			elif "vk.com/" in url:
-				special_url = "https://vk.com/"+self.extract_username(url)
-			else:
-				special_url = self.extract_domain(full_url)
+			except:
+				print (full_url)
 		else:
+			special_url = self.extract_domain(full_url)
+		if special_url is None:
 			special_url = self.extract_domain(full_url)
 		return special_url
 
@@ -329,14 +336,15 @@ class LinkUtils:
 			except Exception as e:
 				print (e)
 				html = str(resp.text)
-			for shortener in self.COMMON_SHORTERNERS:
-				if str(shortener) in str(unpacked_url):
-					unpacked_url, html = self.get_url_from_scrape(url)
+			if not force_unpack:
+				for shortener in self.COMMON_SHORTERNERS:
+					if str(shortener) in str(unpacked_url):
+						unpacked_url, html = self.get_url_from_scrape(url)
 
 		title, raw_text = self.extract_title_and_raw_text(html,unpacked_url)
 		return unpacked_url, title, raw_text
 
-	def get_clean_urls(self,inp_text,with_unpack=True,force_unique=True):
+	def get_clean_urls(self,inp_text,with_unpack=True,force_unique=True,force_unpack=False):
 
 		url_list = self.get_url_list_from_text(inp_text)
 		final_url_list = []
@@ -350,10 +358,11 @@ class LinkUtils:
 				continue
 			if with_unpack or self.shortener_in_url(full_url):
 				try:
-					unpacked_url, title, raw_text = self.unpack_url(full_url)
+					unpacked_url, title, raw_text = self.unpack_url(full_url,force_unpack=force_unpack)
 					special_url = self.extract_special_url(unpacked_url)
 				except Exception as e:
 					print (e)
+					unpacked_url = None
 			else:
 				unpacked_url = self._recursive_trim(full_url)
 				unpacked_url = self.single_clean_url(unpacked_url)
@@ -376,8 +385,8 @@ class LinkCleaner(LinkUtils):
 
 		self.scraper = scraper
 
-	def clean_url(self,input_url,with_unpack=True):
-		url_list = self.get_clean_urls(input_url,with_unpack=with_unpack)
+	def clean_url(self,input_url,with_unpack=True,force_unpack=False):
+		url_list = self.get_clean_urls(input_url,with_unpack=with_unpack,force_unpack=force_unpack)
 		if len(url_list) == 0:
 			#print ("Input does not contain a link. Returning None.")
 			return None

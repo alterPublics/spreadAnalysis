@@ -4,13 +4,17 @@ from spreadAnalysis.io.config_io import Config
 from spreadAnalysis.scraper.scraper import Scraper
 from spreadAnalysis.utils.pd_utils import *
 from spreadAnalysis.persistence.schemas import Spread
+from spreadAnalysis.persistence.mongo import MongoSpread
 from spreadAnalysis import _gvars as gvar
+import spreadAnalysis.utils.helpers as hlp
 import csv
 import pandas as pd
 import random
 import numpy as np
+import sys
+from datetime import datetime
 
-def insert_fourchan_data(path_to_file):
+def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
 
     cols = ["num", "subnum", "thread_num", "op",
             "timestamp", "timestamp_expired",
@@ -21,25 +25,37 @@ def insert_fourchan_data(path_to_file):
             "name", "trip", "title", "comment", "sticky",
             "locked", "poster_hash", "poster_country", "exif"]
 
+    mdb = MongoSpread()
     row_count = 0
+    all_row_count = 0
     n_cols = len(cols)
+    batch_insert = []
     with open(path_to_file,"r") as file_obj:
         reader_obj = csv.reader(file_obj, delimiter=',', quotechar='"')
         for line in reader_obj:
-            #row_count+=1
-            if len(line) == n_cols:
-                doc = {cols[r]:line[r] for r in range(n_cols)}
-            elif len(line) >= 23 and len(line) < n_cols:
-                doc = {cols[r]:line[r] for r in range(len(line))}
-            else:
+            if len(line) > 4 and line[4].isdigit() and datetime.fromtimestamp(int(line[4])) > hlp.to_default_date_format("2019-01-01"):
+                all_row_count+=1
+                if len(line) == n_cols:
+                    doc = {cols[r]:line[r] for r in range(n_cols)}
+                elif len(line) >= 23 and len(line) < n_cols:
+                    doc = {cols[r]:line[r] for r in range(len(line))}
+                else:
+                    continue
+                url = Spread._get_message_link(data=doc,method="fourchan")
+                if url is not None and not LinkCleaner().is_url_domain(url):
+                    row_count+=1
                 continue
-            url = Spread._get_message_link(data=doc,method="fourchan")
-            if url is not None:
-                print (doc)
-                row_count+=1
-            if row_count > 10:
+                if url is not None and not LinkCleaner().is_url_domain(url):
+                    doc["message_id"]=Spread._get_message_id(data=doc,method="fourchan")
+                    doc["method"]="fourchan"
+                    batch_insert.append(doc)
+                if len(batch_insert) > 10:
+                    mdb.write_many(mdb.database["post"],batch_insert,"message_id")
+                    batch_insert=[]
+                    sys.exit()
 
-                sys.exit()
+    print (all_row_count)
+    print (row_count)
 
 def delete_actor_source(main_path,actor=None,source=None,zero_hits=True):
 

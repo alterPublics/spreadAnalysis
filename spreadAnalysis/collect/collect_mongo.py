@@ -65,58 +65,61 @@ class CollectMongo:
 
         inserts, updates = [], []
 
-        if prev_keys is None or len(prev_keys) < 1:
-            if docs is not None:
-                if isinstance(id_finder,str):
-                    for doc in docs:
-                        doc["method"]=method
-                        inserts.append(doc)
-                    self.mdb.write_many(db,inserts,update_key_col)
-                elif isinstance(id_finder,tuple):
-                    for doc in docs:
-                        inserts.append(doc)
-                    self.mdb.write_many(db,inserts,update_key_col)
-                else:
-                    for doc in docs:
-                        _key1 = id_finder(data=doc,method=method)
-                        doc["method"]=method
-                        doc[update_key_col]=_key1
-                        inserts.append(doc)
-                    self.mdb.write_many(db,inserts,update_key_col)
-        else:
-            if docs is not None:
-                if prev_keys is None or isinstance(prev_keys,set):
-                    for doc in docs:
-                        if isinstance(id_finder,str):
-                            _key = doc[id_finder]
-                        else:
-                            _key = id_finder(data=doc,method=method)
-                        doc[update_key_col]=_key
-                        doc["method"]=method
-                        if prev_keys is not None and _key in prev_keys:
-                            updates.append(doc)
-                        else:
+        try:
+            if prev_keys is None or len(prev_keys) < 1:
+                if docs is not None:
+                    if isinstance(id_finder,str):
+                        for doc in docs:
+                            doc["method"]=method
                             inserts.append(doc)
-                            prev_keys.add(_key)
-                elif isinstance(prev_keys,dict):
-                    for doc in docs:
-                        if isinstance(id_finder[0],str):
-                            _key1 = doc[id_finder[0]]
-                        else:
-                            _key1 = id_finder[0](data=doc,method=method)
-                        if isinstance(id_finder[1],str):
-                            _key2 = doc[id_finder[1]]
-                        else:
-                            _key2 = id_finder[1](data=doc,method=method)
-                        if _key1 in prev_keys and _key2 in prev_keys[_key1]:
-                            pass
-                        else:
+                        self.mdb.write_many(db,inserts,update_key_col)
+                    elif isinstance(id_finder,tuple):
+                        for doc in docs:
                             inserts.append(doc)
-                            if _key1 not in prev_keys: prev_keys[_key1]=set([])
-                            prev_keys[_key1].add(_key2)
+                        self.mdb.write_many(db,inserts,update_key_col)
+                    else:
+                        for doc in docs:
+                            _key1 = id_finder(data=doc,method=method)
+                            doc["method"]=method
+                            doc[update_key_col]=_key1
+                            inserts.append(doc)
+                        self.mdb.write_many(db,inserts,update_key_col)
+            else:
+                if docs is not None:
+                    if prev_keys is None or isinstance(prev_keys,set):
+                        for doc in docs:
+                            if isinstance(id_finder,str):
+                                _key = doc[id_finder]
+                            else:
+                                _key = id_finder(data=doc,method=method)
+                            doc[update_key_col]=_key
+                            doc["method"]=method
+                            if prev_keys is not None and _key in prev_keys:
+                                updates.append(doc)
+                            else:
+                                inserts.append(doc)
+                                prev_keys.add(_key)
+                    elif isinstance(prev_keys,dict):
+                        for doc in docs:
+                            if isinstance(id_finder[0],str):
+                                _key1 = doc[id_finder[0]]
+                            else:
+                                _key1 = id_finder[0](data=doc,method=method)
+                            if isinstance(id_finder[1],str):
+                                _key2 = doc[id_finder[1]]
+                            else:
+                                _key2 = id_finder[1](data=doc,method=method)
+                            if _key1 in prev_keys and _key2 in prev_keys[_key1]:
+                                pass
+                            else:
+                                inserts.append(doc)
+                                if _key1 not in prev_keys: prev_keys[_key1]=set([])
+                                prev_keys[_key1].add(_key2)
 
-            self.mdb.insert_many(db,inserts)
-            if not skip_update: self.mdb.update_many(db,updates,update_key_col)
+                self.mdb.insert_many(db,inserts)
+                if not skip_update: self.mdb.update_many(db,updates,update_key_col)
+        except:
+            print ("SAVE FAIL")
 
         return prev_keys
 
@@ -181,12 +184,12 @@ class CollectMongo:
             if not d["method"] in prev_pulls[d["input"]]: prev_pulls[d["input"]][d["method"]]=d
         return prev_pulls
 
-    def get_clean_url(self,org_url,is_domain=False):
+    def get_clean_url(self,org_url,is_domain=False,with_unpack=True):
 
         #scrp = Scraper(settings={"change_user_agent":True,"exe_path":self.conf.CHROMEDRIVER})
         #scrp.browser_init()
         scrp = None
-        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=True)
+        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=with_unpack)
         if not isinstance(clean_url,list):
             clean_url = clean_url["unpacked"]
             clean_url = LinkCleaner().strip_backslash(clean_url)
@@ -250,7 +253,7 @@ class CollectMongo:
             if pull["input_type"]=="domain":
                 self.domain_collect([pull["input"]],start_date,end_date,recollect=True)
 
-    def url_collect(self,org_urls,input_sd,input_ed,recollect=False):
+    def url_collect(self,org_urls,input_sd,input_ed,recollect=False,with_unpack=True):
 
         org_urls = set([d["Url"] for d in list(org_urls) if str(d["Domain"]) == "0" or str(d["Domain"]) == "0.0"])
         cleaned_urls = {doc["url"]:doc["clean_url"] for doc in \
@@ -267,7 +270,7 @@ class CollectMongo:
             if org_url in cleaned_urls:
                 cleaned_url = cleaned_urls[org_url]
             else:
-                cleaned_url = self.get_clean_url(org_url)
+                cleaned_url = self.get_clean_url(org_url,with_unpack=with_unpack)
                 cleaned_urls[org_url]=cleaned_url
                 self.mdb.insert_one(self.mdb.database["clean_url"],
                     {"url":org_url,"clean_url":cleaned_url})
@@ -412,7 +415,7 @@ class CollectMongo:
                     l_start_date = l_end_date
 
     def collect(self,endpoint,title=None,platform_list=None,start_date=None \
-                ,end_date=None,skip_existing=True,iterations=[],actor_web=True):
+                ,end_date=None,skip_existing=True,iterations=[],actor_web=True,with_unpack=True):
 
         if endpoint == "domain": call_endpoint = "url"
         else: call_endpoint = endpoint
@@ -430,7 +433,7 @@ class CollectMongo:
         start_date, end_date = hlp.get_default_dates(start_date,end_date)
 
         if endpoint == "url":
-            self.url_collect(org_inputs,start_date,end_date)
+            self.url_collect(org_inputs,start_date,end_date,with_unpack=with_unpack)
         if endpoint == "actor":
             self.actor_collect(org_inputs,start_date,end_date)
         if endpoint == "domain":
@@ -442,4 +445,5 @@ class CollectMongo:
                 else:
                     org_inputs.update(set([d["Website"] for d in \
                         self.mdb.get_data_from_db(self.mdb.database["actor"])]))
+            #org_inputs = ["https://www.rt.com/"]
             self.domain_collect(org_inputs,start_date,end_date)
