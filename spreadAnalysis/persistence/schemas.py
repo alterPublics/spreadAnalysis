@@ -72,7 +72,7 @@ class Spread:
 		_val = None
 		if method=="crowdtangle":
 			text_fields = [str(data[field]) for field in ["title","caption","description","message"] if field in data]
-			_val = " ".join(text_fields)
+			_val = str(" ".join(text_fields))
 		if method=="twitter2":
 			_val = str(data["text"])
 		if method=="crowdtangle_app":

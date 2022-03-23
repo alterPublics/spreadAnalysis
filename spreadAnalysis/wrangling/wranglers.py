@@ -42,20 +42,20 @@ def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
                 else:
                     continue
                 url = Spread._get_message_link(data=doc,method="fourchan")
-                if url is not None and not LinkCleaner().is_url_domain(url):
-                    row_count+=1
-                continue
+                #if url is not None and not LinkCleaner().is_url_domain(url):
+                    #row_count+=1
                 if url is not None and not LinkCleaner().is_url_domain(url):
                     doc["message_id"]=Spread._get_message_id(data=doc,method="fourchan")
                     doc["method"]="fourchan"
                     batch_insert.append(doc)
-                if len(batch_insert) > 10:
+                    row_count += 1
+                if len(batch_insert) > 10000:
+                    print ("inserting {0} out of {1}".format(row_count,all_row_count))
                     mdb.write_many(mdb.database["post"],batch_insert,"message_id")
                     batch_insert=[]
-                    sys.exit()
 
-    print (all_row_count)
-    print (row_count)
+    #print (all_row_count)
+    #print (row_count)
 
 def delete_actor_source(main_path,actor=None,source=None,zero_hits=True):
 
