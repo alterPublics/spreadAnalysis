@@ -104,7 +104,10 @@ class Spread:
 			_val = str(data["body"])
 		if method=="fourchan":
 			#print (data)
-			_val = str(data["comment"])
+			if "comment" in data:
+				_val = str(data["comment"])
+			else:
+				_val = ""
 		return _val
 
 	@staticmethod
@@ -209,7 +212,8 @@ class Spread:
 		if method=="gab":
 			_val = str(data["created_at"]).replace("T"," ").split(".")[0]
 		if method=="fourchan":
-			_val = str(datetime.fromtimestamp(int(data["timestamp"])))
+			if "timestamp" in data:
+				_val = str(datetime.fromtimestamp(int(data["timestamp"])))
 		return _val
 
 	@staticmethod
@@ -302,7 +306,8 @@ class Spread:
 		_val = None
 		if method=="crowdtangle":
 			_val = str(data["account"]["name"])
-			if len(str(_val)) < 1: _val = str(data["author"]["username"])
+			if len(str(_val)) < 1:
+				_val = Spread()._get_actor_username(method=method,data=data)
 		if method=="twitter2":
 			_val = str(data["author"]["name"])
 		if method=="crowdtangle_app":
@@ -331,7 +336,8 @@ class Spread:
 		if method=="gab":
 			_val = str(data["account"]["display_name"])
 		if method=="fourchan":
-			_val = str(data["name"])
+			if "name" in data:
+				_val = str(data["name"])
 
 		return _val
 
@@ -650,8 +656,9 @@ class Spread:
 			for field in fields:
 				if field in data:
 					_val+=int(data[field])
-		if method=="reddit":
-			_val = int(data["op"])
+		if method=="fourchan":
+			if "op" in data:
+				_val = int(data["op"])
 
 		return _val
 

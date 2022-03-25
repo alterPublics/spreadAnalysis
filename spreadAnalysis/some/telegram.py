@@ -14,13 +14,13 @@ class Telegram:
         self.tokens = auth["tokens"]
         if auto_init:
             token = random.choice(self.tokens)
-            self.client = TelegramClient('main_session', token["api_id"], token["api_hash"])
+            self.client = TelegramClient('main_session2', token["api_id"], token["api_hash"])
             self.client.start()
 
     def _client_init(self):
 
         token = random.choice(self.tokens)
-        self.client = TelegramClient('main_session', token["api_id"], token["api_hash"])
+        self.client = TelegramClient('main_session2', token["api_id"], token["api_hash"])
         self.client.start()
 
     async def _get_messages_from_username(self,output_data,username,start_date,end_date,max_results=None):

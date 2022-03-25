@@ -571,9 +571,10 @@ class MongoSpread(MongoDatabase):
 		net_db.create_index([ ("actor", -1) ])
 		net_db.create_index([ ("domain", -1) ])
 
-	def update_clean_urls(self,shorten_domains,num_cores=12):
+	def update_clean_urls(self,shorten_domains,num_cores=12,only_insert=False):
 
 		cleaned_urls = {d["url"]:d["clean_url"] for d in self.database["clean_url"].find({})}
+		cleaned_urls.update({d["url"]:d["clean_url"] for d in self.database["clean_url"].find({}) if d["url"] is not None and d["clean_url"] is not None and d["url"]!=d["clean_url"] and d["url"]!=d["clean_url"][:-1]})
 		updates = []
 		url_count = 0
 		conf = Config()
@@ -581,16 +582,17 @@ class MongoSpread(MongoDatabase):
 		pool = Pool(num_cores)
 		insert_new_clean_count = 0
 		for dom in shorten_domains:
-			updates = []
-			for url_d in self.database["url_bi_network"].find({"domain":dom}):
+			net_urls = set(list(url_d["url"] for url_d in self.database["url_bi_network"].find({"domain":dom})))
+			for url_d in net_urls:
 				url_count+=1
-				old_url = url_d["url"]
+				old_url = url_d
 				print (old_url)
 				if old_url in cleaned_urls:
 					new_url = cleaned_urls[old_url]
-					updates.append(UpdateOne({"url":old_url},
-								{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}))
+					if old_url != new_url:
+						updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 				else:
+					if only_insert: continue
 					#scrp = Scraper(settings={"change_user_agent":True,"exe_path":conf.CHROMEDRIVER})
 					#scrp.browser_init()
 					#new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
@@ -607,8 +609,7 @@ class MongoSpread(MongoDatabase):
 									self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
 									insert_new_clean_count+=1
 									print (new_url)
-									updates.append(UpdateOne({"url":old_url},
-												{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}))
+									updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 							else:
 								continue
 						inter_short_urls = set([])
@@ -619,8 +620,14 @@ class MongoSpread(MongoDatabase):
 					print (insert_new_clean_count)
 					insert_new_clean_count=0
 				#if url_count > 7:
-			if len(updates) > 0:
-				self.database["url_bi_network"].bulk_write(updates)
+			print (len(updates))
+			if len(updates) > 0 and only_insert:
+				for up in updates:
+					query = up[0]
+					value = up[1]
+					self.database["url_bi_network"].update_many(query,value)
+				updates = []
+				#sys.exit()
 
 def test():
 
@@ -643,7 +650,9 @@ def test():
 			all_urls.add(url_d["url"])
 	print (len(all_urls))
 	sys.exit()"""
-	shorten_domains = ["dlvr.it"]
+	#shorten_domains = ["dlvr.it"]
+	#m.update_clean_urls(shorten_domains,only_insert=True)
+	#sys.exit()
 	try_count = 0
 	while True:
 		try:
@@ -653,10 +662,14 @@ def test():
 			print (e)
 			print ("sleeping for 20 seconds")
 			time.sleep(20)
-		if try_count > 300:
+		if try_count > 700:
 			break
+	sys.exit()
 	updates = []
 	count = 0
+	#m.database["url_bi_network"].create_index([ ("actor", -1) ])
+	#m.database["url_bi_network"].create_index([ ("domain", -1) ])
+	#sys.exit()
 	try:
 		m.database["url_bi_network"].drop_index('actor_-1')
 		m.database["url_bi_network"].drop_index('domain_-1')

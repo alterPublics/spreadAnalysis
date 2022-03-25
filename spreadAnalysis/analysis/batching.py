@@ -453,7 +453,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 					binet.add_node_and_edges(dom,n,node_type0="actor",node_type1="url",weight=1)
 		return binet
 
-	def add_data_to_net(docs,binet,has_been_queried,org_type,extra=None):
+	def add_data_to_net(docs,binet,has_been_queried,org_type,extra=None,verbose=False):
 
 		for doc in docs:
 			if doc[org_type] not in has_been_queried:
@@ -464,12 +464,15 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 						else:
 							binet.add_node_and_edges(doc["actor_platform"],doc["url"],node_type0="actor",node_type1="url",weight=doc["message_ids"])
 					else:
-						print (doc)
+						if verbose:
+							print (doc)
+						else:
+							pass
 		return binet
 
 	if len(only_platforms) < 1:
 		only_platforms = ["facebook","twitter","web","vkontakte","reddit","youtube",
-					"telegram","tiktok","gab","instagram"]
+					"telegram","tiktok","gab","instagram","fourchan"]
 
 	mdb = MongoSpread()
 	net_db = mdb.database["url_bi_network"]
