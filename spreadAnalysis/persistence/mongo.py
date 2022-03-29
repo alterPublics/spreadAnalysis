@@ -490,6 +490,68 @@ class MongoSpread(MongoDatabase):
 					self.delete_with_key_val(db,(coding_db_key,"scheme_title"),(k,scheme_title))
 		self.write_many(db,coding_docs,(coding_db_key,"scheme_title"),sub_mapping=None)
 
+	def repart_url_bi_net(self):
+
+		aliases = self.get_aliases()
+		actor_aliases = self.get_actor_aliases(platform_sorted=False)
+		post_db = self.database["post"]
+		message_ids = []
+		for d in self.database["url_bi_network"].find({"url":None}):
+			message_ids.extend(list(d["message_ids"]))
+		cur = post_db.find({})
+		next_post = True
+		batch_insert = {}
+		seen_ids = set([])
+		count = 0
+		net_db = self.database["url_bi_network"]
+		for next_post in post_db.find({"message_id":{"$in":message_ids}}):
+			if next_post is not None:
+				post = next_post
+				url = Spread._get_message_link(data=post,method=post["method"])
+				if url is not None:
+					url = LinkCleaner().single_clean_url(url)
+					url = LinkCleaner().sanitize_url_prefix(url)
+					actor_username = Spread._get_actor_username(data=post,method=post["method"])
+					actor_id = Spread._get_actor_id(data=post,method=post["method"])
+					platform = Spread._get_platform(data=post,method=post["method"])
+					platform_type = Spread._get_platform_type(data=post,method=post["method"])
+					domain = Spread._get_message_link_domain(data=post,method=post["method"])
+					if actor_username in actor_aliases and platform_type in actor_aliases[actor_username]:
+						actor = actor_aliases[actor_username][platform_type]
+						actor_platform = str(actor)+"_"+str(platform_type)
+						actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+					elif actor_id in actor_aliases and platform_type in actor_aliases[actor_id]:
+						actor = actor_aliases[actor_id][platform_type]
+						actor_platform = str(actor)+"_"+platform_type
+						actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+					else:
+						actor = actor_username
+						actor_platform = str(actor_username)+"_"+platform_type
+						actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+					if (url,actor) not in batch_insert:
+						batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
+											"actor":actor,"actor_label":actor_label,"platform":platform,
+											"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+					batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
+					for extra_url in Spread._get_all_external_message_links(data=post,method=post["method"]):
+						extra_url = LinkCleaner().single_clean_url(extra_url)
+						extra_url = LinkCleaner().sanitize_url_prefix(extra_url)
+						if extra_url != url and not LinkCleaner().is_url_domain(extra_url):
+							if (extra_url,actor) not in batch_insert:
+								domain = LinkCleaner().extract_special_url(extra_url)
+								batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
+													"actor":actor,"actor_label":actor_label,"platform":platform,
+													"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+							batch_insert[(extra_url,actor)]["message_ids"].append(post["message_id"])
+
+					if len(batch_insert) >= 10000:
+						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+						batch_insert = {}
+				if count % 100000 == 0:
+					print ("post loop " + str(count))
+		if len(batch_insert) > 0:
+			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+
 	def update_url_bi_network(self,new=False):
 
 		net_db = self.database["url_bi_network"]
@@ -589,7 +651,7 @@ class MongoSpread(MongoDatabase):
 				print (old_url)
 				if old_url in cleaned_urls:
 					new_url = cleaned_urls[old_url]
-					if old_url != new_url:
+					if old_url != new_url and new_url is not None:
 						updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 				else:
 					if only_insert: continue

@@ -11,6 +11,8 @@ if __name__ == "__main__":
 	all_time = time.time()
 	mdb = MongoSpread()
 	mdb.update_url_bi_network(new=False)
+	#mdb.repart_url_bi_net()
+	#sys.exit()
 	print("--- %s seconds --- to update url network" % (time.time() - start_time))
 	start_time = time.time()
 	btc.update_actor_message(new=False)

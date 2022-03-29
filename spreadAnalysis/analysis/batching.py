@@ -438,7 +438,7 @@ def iteration_test():
 		if count % 100000 == 0:
 			print("--- {0} seconds --- total for {1}".format((time.time() - start_time),str(count)))
 
-def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([]),actor_domains=[]):
+def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([]),actor_domains=[],batch_size=2):
 
 	def add_domains_as_actors(binet,actor_domains):
 
@@ -538,7 +538,7 @@ def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selecti
 
 	print ("searching for second degree interconnections.")
 	fucount = 0
-	fchunks_size = 2
+	fchunks_size = batch_size
 	for _factor_chunk in hlp.chunks(list(second_degree_actors),int(len(list(second_degree_actors))/fchunks_size)+1):
 		second_degree_queries = []
 		for _factor in _factor_chunk:
