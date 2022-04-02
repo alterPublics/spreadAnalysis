@@ -715,7 +715,7 @@ def test():
 	#shorten_domains = ["dlvr.it"]
 	#m.update_clean_urls(shorten_domains,only_insert=True)
 	#sys.exit()
-	try_count = 0
+	"""try_count = 0
 	while True:
 		try:
 			m.update_clean_urls(shorten_domains)
@@ -728,16 +728,18 @@ def test():
 			break
 	sys.exit()
 	updates = []
+	count = 0"""
+	m.database["url_bi_network"].create_index([ ("actor", -1) ])
+	m.database["url_bi_network"].create_index([ ("domain", -1) ])
+	sys.exit()
 	count = 0
-	#m.database["url_bi_network"].create_index([ ("actor", -1) ])
-	#m.database["url_bi_network"].create_index([ ("domain", -1) ])
-	#sys.exit()
+	updates = []
 	try:
 		m.database["url_bi_network"].drop_index('actor_-1')
 		m.database["url_bi_network"].drop_index('domain_-1')
 	except:
 		pass
-	for d in m.database["url_bi_network"].find():
+	for d in m.database["url_bi_network"].find().skip(44000000):
 		count+=1
 		new_domain = LinkCleaner().extract_special_url(d["url"])
 		if new_domain != d["domain"]:

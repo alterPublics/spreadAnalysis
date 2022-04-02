@@ -182,7 +182,7 @@ def aggregate_actor_data(args):
 	#print ("returning " + str(process_id))
 	return actor_data
 
-def update_agg_actor_metrics(num_cores=12,skip_existing=False):
+def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
 
 	warnings.filterwarnings('ignore')
 	np.seterr(all="ignore")
@@ -195,19 +195,24 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False):
 	actor_platform = True
 	batch_insert = {}
 	actor_info = {}
-	max_upd_date = list(actor_metric_db.find().sort("updated_at",-1).limit(1))
-	if max_upd_date is None or len(max_upd_date) < 1 or "updated_at" not in max_upd_date[0]:
-		max_upd_date = list(actor_metric_db.find().sort("inserted_at",-1).limit(1))
-		if max_upd_date is None or len(max_upd_date) < 1:
-			max_upd_date = datetime(2000,1,1)
+	if not full:
+		max_upd_date = list(actor_metric_db.find().sort("updated_at",-1).limit(1))
+		if max_upd_date is None or len(max_upd_date) < 1 or "updated_at" not in max_upd_date[0]:
+			max_upd_date = list(actor_metric_db.find().sort("inserted_at",-1).limit(1))
+			if max_upd_date is None or len(max_upd_date) < 1:
+				max_upd_date = datetime(2000,1,1)
+			else:
+				max_upd_date = max_upd_date[0]["inserted_at"]
 		else:
-			max_upd_date = max_upd_date[0]["inserted_at"]
+			max_upd_date = max_upd_date[0]["updated_at"]
+		max_upd_date = max_upd_date-timedelta(days=1)
+		if skip_existing: max_upd_date = datetime(2000,1,1)
+		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
+		random.shuffle(actor_obj_ids)
 	else:
-		max_upd_date = max_upd_date[0]["updated_at"]
-	max_upd_date = max_upd_date-timedelta(days=1)
-	if skip_existing: max_upd_date = datetime(2000,1,1)
-	actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
-	random.shuffle(actor_obj_ids)
+		actor_platform_ids = set(set([d["actor_platform"] for d in actor_metric_db.find({"actor_name":{"$exists":False}},{"actor_platform":1})]))
+		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({},{"actor_platform":1,"_id":1}) if d["actor_platform"] in actor_platform_ids]
+		print (len(actor_obj_ids))
 	for a_obj in actor_obj_ids:
 		actor_count += 1
 		if actor_count % 10000 == 0:

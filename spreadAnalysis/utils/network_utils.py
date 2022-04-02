@@ -5,6 +5,45 @@ import numpy as np
 from operator import itemgetter
 from multiprocessing import Pool, Manager
 import random
+import pandas as pd
+from spreadAnalysis.utils import helpers as hlp
+
+def add_score_based_label(g,att_name,att_vals):
+
+	def get_node_score_medians(g,atts):
+
+		df = pd.DataFrame([d for n,d in list(g.nodes(data=True))])[[a+"_score" for a in atts]]
+		medians = df.median()
+		return dict(medians)
+
+	def _is_all_low(scores):
+
+		return all(s <= 0.0 for s in scores)
+
+	if isinstance(g,str):
+		g = nx.read_gexf(g)
+	medians = get_node_score_medians(g,att_vals)
+	try:
+		default_grey_label = [a for a in medians.keys() if "grey" in a][0]
+	except:
+		default_grey_label = None
+	for n,d in list(g.nodes(data=True)):
+		stdzied = {a+"_score":d[a+"_score"]-medians[a+"_score"] for a in att_vals}
+		if _is_all_low(list(stdzied.values())) and default_grey_label is not None:
+			label = default_grey_label
+		else:
+			label = sorted(stdzied.items(), key = itemgetter(1), reverse=True)[0][0]
+		nx.set_node_attributes(g,{n:label},att_name)
+	return g
+
+def approximate_eccentricity(g):
+
+	try:
+		eccs = [nx.eccentricity(g,n) for n in random.sample(list(g.nodes()),100)]
+	except:
+		eccs = [3.0]
+
+	return float(np.mean(np.array(eccs)))
 
 def set_neighbour_affinity(args):
 
@@ -12,19 +51,95 @@ def set_neighbour_affinity(args):
 	node_edges = args[0]
 	node_atts = args[1]
 	unique_atts = args[2]
-	for edges in node_edges:
+	diam = args[3]
+	grey_number = args[4]
+	for n,edges in node_edges.items():
 		n_edges = 0
 		new_atts = {a:0.0 for a in unique_atts}
 		avg_dists = []
+		min_dists = []
+		dist_weights = []
 		for org,edg,w in edges:
-			avg_dists.append(node_atts[edg]["dist_to_0"]+1.0)
+			main_node = org
+			avg_dists.append(node_atts_gl[edg]["dist_to_0g{0}".format(grey_number)])
+			dist_weights.append(w["nij"])
 			for att in unique_atts:
-				new_atts[att]+=np.log(w+2)*node_atts[edg][att]*(node_atts[edg]["dist_to_0"]+1)**-1
+				new_atts[att]+=np.log(w["nij"]+2)*node_atts_gl[edg][att]*(node_atts_gl[edg]["dist_to_0g{0}".format(grey_number)]+1)**-1
 		atts_sum = float(np.sum(np.array(list(new_atts.values()))))
 		if atts_sum > 0:
 			new_atts = {a:float(v)/atts_sum for a,v in list(new_atts.items())}
-		new_atts["dist_to_0"]=float(np.mean(np.array(avg_dists)))
+		mean_dist = float(np.average(np.array(avg_dists),weights=np.array(dist_weights)))
+		min_dist = float(np.amin(np.array(avg_dists)))
+		dist_score = mean_dist*float((np.log((mean_dist-min_dist)+1.0)+1.0)**-1)+1.0
+		if dist_score < 1.0:
+			dist_score = 1.0
+		new_atts["dist_to_0g{0}".format(grey_number)]=dist_score
+		new_node_atts[main_node]=new_atts
+
 	return new_node_atts
+
+def set_neighbour_affinity_score(args):
+
+	new_node_atts = {}
+	node_edges = args[0]
+	node_atts = args[1]
+	unique_atts = args[2]
+	grey_number = args[3]
+	for n,edges in node_edges.items():
+		new_atts = dict(node_atts_gl[n])
+		avg_dist = new_atts["dist_to_0g{0}".format(grey_number)]
+		new_atts.update({str(a)+"_score":float(v)*np.log(len(edges)+1)*((avg_dist+1)**-1) for a,v in list(new_atts.items()) if a in unique_atts})
+		new_node_atts[n]=new_atts
+	return new_node_atts
+
+def add_affinity_scores(g,actor_mapping,num_cores=12,grey_number=0,batch_size=2,noise=True):
+
+	manager = Manager()
+	global node_atts_gl
+	node_atts_gl = manager.dict()
+	actor_mapping = {k:v for k,v in actor_mapping.items() if k in g}
+	n_actors = len(actor_mapping)
+	not_mapped_actors = [a for a in g.nodes() if a not in actor_mapping]
+	if noise:
+		if len(not_mapped_actors) > 2*n_actors:
+			grey_actors = {a:"grey{}".format(grey_number) for a in random.sample(not_mapped_actors,n_actors)}
+		else:
+			grey_actors = {a:"grey{}".format(grey_number) for a in random.sample(not_mapped_actors,int(n_actors*0.5))}
+		actor_mapping.update(grey_actors)
+	else:
+		grey_actors = {}
+	unique_atts = set([v for k,v in actor_mapping.items()])
+	node_atts_gl = {n:{ua:0.0 for ua in unique_atts} for n in g.nodes()}
+	#diam = float(nx.diameter(g))
+	diam = approximate_eccentricity(g)-1.0
+	for n in list(g.nodes()):
+		if n in actor_mapping:
+			node_atts_gl[n][actor_mapping[n]]=1.0
+			node_atts_gl[n]["dist_to_0g{0}".format(grey_number)]=0.0
+		else:
+			node_atts_gl[n]["dist_to_0g{0}".format(grey_number)]=diam
+	pool = Pool(num_cores)
+	its = 10
+	for r in range(its):
+		print ("Adding affinities. Iteration {0} out of {1}".format(r,its))
+		net_nodes = list(g.nodes())
+		random.shuffle(net_nodes)
+		for nodes_chunk in hlp.chunks(net_nodes,int(len(net_nodes)/batch_size)+1):
+			temp_docs = {n:list(g.edges(n,data=True)) for n in nodes_chunk if n not in actor_mapping}
+			multi_inputs = [(l,dict({}),unique_atts,diam,grey_number) for l in list(hlp.chunks_optimized(temp_docs,n_chunks=num_cores))]
+			#print (dict(psutil.virtual_memory()._asdict()))
+			results = pool.map(set_neighbour_affinity,multi_inputs)
+			for result in results:
+				node_atts_gl.update(result)
+	temp_docs = {n:list(g.edges(n,data=True)) for n in list(g.nodes()) if n in grey_actors}
+	node_atts_gl.update(set_neighbour_affinity((temp_docs,{},unique_atts,diam,grey_number)))
+	temp_docs = {n:list(g.edges(n,data=True)) for n in list(g.nodes())}
+	node_atts_gl.update(set_neighbour_affinity_score((temp_docs,{},unique_atts,grey_number)))
+	for att in unique_atts:
+		nx.set_node_attributes(g,{n:node_atts_gl[n][att] for n in list(g.nodes())} ,att)
+		nx.set_node_attributes(g,{n:node_atts_gl[n][att+"_score"] for n in list(g.nodes())} ,att+"_score")
+	nx.set_node_attributes(g,{n:node_atts_gl[n]["dist_to_0g{0}".format(grey_number)] for n in list(g.nodes())} ,"dist_to_0g{0}".format(grey_number))
+	return g
 
 class NetworkUtils:
 

@@ -231,7 +231,6 @@ class LinkUtils:
 				elif "reddit." in url:
 					special_url = self.extract_reddit_url(url)
 				elif "t.me/" in url:
-
 					special_url = "https://t.me/"+self.extract_username(url)
 				elif "tiktok." in url:
 					special_url = "https://tiktok.me/"+self.extract_username(url,with_unpack=False)
@@ -440,9 +439,14 @@ class LinkCleaner(LinkUtils):
 			if "@" not in url:
 				if with_unpack:
 					url = self.unpack_url(url,force_unpack=False)[0]
-			username = url.split("tiktok.")[-1].split("/")[1].split("?")[0].\
-				replace("@","")
-			if "/" in username: username = username.split("/")[0]
+			if "-webapp." in url and "@" not in url:
+				url = None
+			if ("vm.tiktok." in str(url) or "vt.tiktok." in str(url))and "@" not in str(url):
+				url = None
+			if url is not None:
+				username = url.split("tiktok.")[-1].split("/")[1].split("?")[0].\
+					replace("@","")
+				if "/" in username: username = username.split("/")[0]
 		elif "t.me" in url:
 			if "/s/" in url: url = url.replace("/s/","/")
 			username = str(url).split("t.me")[-1].split("/")[1]
