@@ -26,7 +26,7 @@ def get_links_to_actors():
 	with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.alt_all":{"$exists":True}}) if "actor" in d}
 	platforms = ["Tiktok","Instagram","Facebook Page","Twitter","Youtube","Vkontakte","Telegram","Gab"]
 	some_prefixes = ["tiktok.","instagram.","facebook.","twitter.","youtube.","vk.com/","t.me/","gab.com/"]
-	blue = {"Actor":None,""}
+	#blue = {"Actor":None,""}
 	for pre,platform in zip(some_prefixes,platforms):
 		new_accounts = set([])
 		links = mdb.database["url_bi_network"].find({"domain":{"$regex":pre}})

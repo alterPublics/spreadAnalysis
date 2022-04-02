@@ -443,7 +443,7 @@ def iteration_test():
 		if count % 100000 == 0:
 			print("--- {0} seconds --- total for {1}".format((time.time() - start_time),str(count)))
 
-def create_bi_ego_graph(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([]),actor_domains=[],batch_size=2):
+def create_bi_ego_graph_OLD(selection_types=["actor"],actor_selection={},url_selection={},actors=[],urls=[],between_dates=None,only_platforms=[],title="test",num_cores=12,direct_urls=set([]),actor_domains=[],batch_size=2):
 
 	def add_domains_as_actors(binet,actor_domains):
 
