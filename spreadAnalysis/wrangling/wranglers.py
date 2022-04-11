@@ -31,10 +31,14 @@ def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
     n_cols = len(cols)
     batch_insert = []
     with open(path_to_file,"r") as file_obj:
-        reader_obj = csv.reader(file_obj, delimiter=',', quotechar='"')
+        #while all_row_count < 100:
+            #all_row_count+=1
+            #print (file_obj.readline())
+        #sys.exit()
+        reader_obj = csv.reader(file_obj, delimiter=',', quotechar='"', escapechar='\\')
         for line in reader_obj:
+            all_row_count+=1
             if len(line) > 4 and line[4].isdigit() and datetime.fromtimestamp(int(line[4])) > hlp.to_default_date_format("2019-01-01"):
-                all_row_count+=1
                 if len(line) == n_cols:
                     doc = {cols[r]:line[r] for r in range(n_cols)}
                 elif len(line) >= 23 and len(line) < n_cols:
@@ -44,6 +48,11 @@ def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
                 url = Spread._get_message_link(data=doc,method="fourchan")
                 #if url is not None and not LinkCleaner().is_url_domain(url):
                     #row_count+=1
+                #print (doc)
+                row_count+=1
+                if all_row_count > 10000:
+                    print (row_count)
+                    sys.exit()
                 if url is not None and not LinkCleaner().is_url_domain(url):
                     doc["message_id"]=Spread._get_message_id(data=doc,method="fourchan")
                     doc["method"]="fourchan"
@@ -53,6 +62,7 @@ def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
                     print ("inserting {0} out of {1}".format(row_count,all_row_count))
                     mdb.write_many(mdb.database["post"],batch_insert,"message_id")
                     batch_insert=[]
+
 
     #print (all_row_count)
     #print (row_count)

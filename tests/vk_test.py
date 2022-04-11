@@ -4,7 +4,7 @@ from spreadAnalysis.io.config_io import Config
 actor = "anonymousnews_org"
 conf = Config()
 vk = Vkontakte(conf.get_auth()["vkontakte"])
-data = vk.actor_content("anonymousnews_org",start_date="2022-01-01")
+data = vk.actor_content("352484777",start_date="2022-03-01")
 print (data)
 print (len(data["output"]))
 sys.exit()

@@ -10,7 +10,7 @@ if __name__ == "__main__":
 	start_time = time.time()
 	all_time = time.time()
 	mdb = MongoSpread()
-	mdb.update_url_bi_network(new=True)
+	mdb.update_url_bi_network(new=False)
 	#mdb.repart_url_bi_net()
 	#sys.exit()
 	print("--- %s seconds --- to update url network" % (time.time() - start_time))

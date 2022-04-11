@@ -19,19 +19,29 @@ from spreadAnalysis.persistence.mongo import MongoSpread
 
 some_prefixes = ["facebook.","twitter.","vk.com","t.me"]
 
-def get_links_to_actors():
+def get_links_to_actors(main_path,net_title):
 
 	mdb = MongoSpread()
+	final_data = []
 	actor_aliases = mdb.get_actor_aliases(platform_sorted=True)
-	with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.alt_all":{"$exists":True}}) if "actor" in d}
+	with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.{0}".format(net_title):{"$exists":True}}) if "actor" in d}
 	platforms = ["Tiktok","Instagram","Facebook Page","Twitter","Youtube","Vkontakte","Telegram","Gab"]
 	some_prefixes = ["tiktok.","instagram.","facebook.","twitter.","youtube.","vk.com/","t.me/","gab.com/"]
-	#blue = {"Actor":None,""}
-	for pre,platform in zip(some_prefixes,platforms):
+	fb_page_count = {}
+	for pre,platform in list(zip(some_prefixes,platforms)):
+		print (platform)
 		new_accounts = set([])
-		links = mdb.database["url_bi_network"].find({"domain":{"$regex":pre}})
+		if len(with_net_actors) < 15000:
+			links = mdb.database["url_bi_network"].find({"actor":{"$in":list(with_net_actors)},"domain":{"$regex":pre}})
+		else:
+			links = mdb.database["url_bi_network"].find({"domain":{"$regex":pre}})
 		for link in links:
 			if pre in str(link["domain"]):
+				if platform == "Youtube":
+					if "user/" in str(link["url"]) or "channel/" in str(link["url"]) or "/c/" in str(link["url"]):
+						pass
+					else:
+						continue
 				if link["actor"] in with_net_actors:
 					try:
 						username = LinkCleaner().extract_username(link["url"],never_none=False,with_unpack=False)
@@ -40,11 +50,23 @@ def get_links_to_actors():
 					if username is not None and len(str(username)) > 2:
 						if username not in new_accounts and username not in actor_aliases[platform]:
 							new_accounts.add(username)
-							#print (username + "    " + link["url"])
-							print (username)
-							pass
+							pdoc = {"Actor":username}
+							pdoc.update({p:None for p in platforms})
+							pdoc["Iteration"]=0
+							if platform == "Facebook Page":
+								pdoc[platform]="https://www.facebook.com/{0}".format(username)
+								fb_page_count["https://www.facebook.com/{0}".format(username)]=0
+							else:
+								pdoc[platform]=username
+							final_data.append(pdoc)
+							#print (username)
+							#print (username + "     " + str(link["url"]))
+						if username in new_accounts and platform == "Facebook Page":
+							fb_page_count["https://www.facebook.com/{0}".format(username)]+=1
 		print (len(new_accounts))
-		break
+	out_df = pd.DataFrame(final_data)
+	out_df["FB_counts"]=out_df["Facebook Page"].map(fb_page_count)
+	out_df.to_csv(main_path+"/links_to_actors_{0}.csv".format(net_title),index=False)
 
 
 def export_actor_to_pandas(file_path,query,net_name=None):
@@ -57,8 +79,9 @@ def export_actor_to_pandas(file_path,query,net_name=None):
 				actor_doc.update(actor_doc["net_data"][net_name])
 		if "net_data" in actor_doc:
 			del actor_doc["net_data"]
-		if actor_doc["actor_name"] is None or str(actor_doc["actor_name"]) == "":
-			actor_doc["actor_name"]
+		if "actor_name" not in actor_doc or actor_doc["actor_name"] is None or str(actor_doc["actor_name"]) == "":
+			actor_doc["actor_name"]=actor_doc["actor_platform"]
+			actor_doc["platform"]="web"
 		df.append(actor_doc)
 
 	pd.DataFrame(df).to_csv(file_path,index=False)

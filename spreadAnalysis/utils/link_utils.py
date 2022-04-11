@@ -54,6 +54,8 @@ class LinkUtils:
 		if "&set=" in new_url: new_url = new_url.split("&set=")[0]
 		if "?print=1" in new_url: new_url = new_url.split("?print=1=")[0]
 		if "&print=1" in new_url: new_url = new_url.split("&print=1=")[0]
+		if "?wtrid" in new_url: new_url = new_url.split("?wtrid")[0]
+		if "&wtrid" in new_url: new_url = new_url.split("&wtrid")[0]
 
 		for r in range(2):
 			if str(new_url)[-1] == "]": new_url = str(new_url)[:-1]
@@ -419,7 +421,8 @@ class LinkCleaner(LinkUtils):
 				username = new_url
 			else:
 				if str(new_url)[-1] == "/": new_url = str(url)[:-1]
-				username = str(new_url).split("/")[-1]
+				new_url = str(new_url).split("facebook.")[-1]
+				username = str(new_url).split("/")[1]
 				if len(username) < 2: username = str(url).split("/")[-2]
 				if "-" in username: username = username.split("-")[-1].strip()
 		elif "instagram." in url and "/" in url and "/" in str(url).split("instagram.")[-1]:
@@ -450,12 +453,35 @@ class LinkCleaner(LinkUtils):
 		elif "t.me" in url:
 			if "/s/" in url: url = url.replace("/s/","/")
 			username = str(url).split("t.me")[-1].split("/")[1]
+			if str(username)[:1] == "+":
+				return None
 			if "/" in username: username = username.split("/")[0]
 		elif "vk.com" in url:
 			username = str(url).split("vk.com")[-1].split("/")[1]
+			username = username.split("#wall")[0]
+			if "@" in username:
+				username = username.split("-")[0].replace("@","")
+			elif (username[:4] == "wall" and "_" in username) or (username[:5] == "wall" and "_" in username):
+				username = "id{0}".format(username.split("_")[0].replace("wall",""))
+			elif (username[:4] == "video" and "_" in username) or (username[:5] == "video" and "_" in username):
+				username = "id{0}".format(username.split("_")[0].replace("video",""))
+			elif (username[:4] == "photo" and "_" in username) or (username[:5] == "photo" and "_" in username):
+				username = "id{0}".format(username.split("_")[0].replace("photo",""))
+			elif (username[:4] == "topic" and "_" in username) or (username[:5] == "topic" and "_" in username):
+				username = "id{0}".format(username.split("_")[0].replace("topic",""))
+			elif (username[:4] == "album" and "_" in username) or (username[:5] == "album" and "_" in username):
+				username = "id{0}".format(username.split("_")[0].replace("album",""))
+			if str(username)[2:].isdecimal() and "id" in username:
+				username = str(username)[2:]
+			if str(username)[3:].isdecimal() and "id" in username:
+				username = str(username)[3:]
 			if "/" in username: username = username.split("/")[0]
 		elif "gab.com" in url:
-			username = str(url).split("gab.com")[-1].split("/")[1]
+			if "/gab.com" in url or "w.gab.com" in url:
+				username = str(url).split("gab.com")[-1].split("/")[1]
+				username = username.replace("@","")
+			else:
+				return None
 			if "/" in username: username = username.split("/")[0]
 
 		if username is not None:

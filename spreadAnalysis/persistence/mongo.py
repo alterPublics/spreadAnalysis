@@ -713,8 +713,8 @@ def test():
 	print (len(all_urls))
 	sys.exit()"""
 	#shorten_domains = ["dlvr.it"]
-	#m.update_clean_urls(shorten_domains,only_insert=True)
-	#sys.exit()
+	m.update_clean_urls(shorten_domains,only_insert=True)
+	sys.exit()
 	"""try_count = 0
 	while True:
 		try:
