@@ -80,6 +80,7 @@ def export_actor_to_pandas(file_path,query,net_name=None):
 		if "net_data" in actor_doc:
 			del actor_doc["net_data"]
 		if "actor_name" not in actor_doc or actor_doc["actor_name"] is None or str(actor_doc["actor_name"]) == "":
+			print (actor_doc["actor_platform"])
 			actor_doc["actor_name"]=actor_doc["actor_platform"]
 			actor_doc["platform"]="web"
 		df.append(actor_doc)

@@ -120,33 +120,64 @@ def test_densities(table, start, end, step):
 		yield (s, nodes, (100.0 * nodes) / onodes, edges, (100.0 * edges) / oedges, avgdeg, avgdeg / oavgdeg)
 
 def noise_corrected(table, undirected = False, return_self_loops = False, calculate_p_value = False, num_cores=12):
-	sys.stderr.write("Calculating NC score...\n")
-	#table = table.copy()
-	#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
-	#src_sum = table.groupby(["src"]).apply_parallel(_by_sum, num_processes=num_cores)
-	#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
-	#src_sum = table.groupby(by = "src").sum()[["nij"]]
-	trg_sum, src_sum = _multi_group_by(table,["trg","src"],"nij")
-	table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
-	table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
-	table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
-	table["n.."] = table["nij"].sum()
-	#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
-	#table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
-	table = _multi_funcs(table,["mean_prior_probability","kappa"],[_mean_prior_prob,_kappa])
-	table = _multi_funcs(table,["score","var_prior_probability"],[_score,_var_prior_probability])
-	table = _multi_funcs(table,["alpha_prior","beta_prior"],[_alpha_prior,_beta_prior])
-	table = _multi_funcs(table,["alpha_post","beta_post"],[_alpha_post,_beta_post])
-	table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
-	table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
-	#table = _multi_funcs(table,["d","variance_cij"],[_d,_variance_cij])
-	table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
-	table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
-	table["sdev_cij"] = table["variance_cij"] ** .5
-	if not return_self_loops:
-		table = table[table["src"] != table["trg"]]
-	if undirected:
-		table = table[table["src"] <= table["trg"]]
+	if num_cores > 1:
+		sys.stderr.write("Calculating NC score...\n")
+		#table = table.copy()
+		#trg_sum = table.groupby(["trg"]).apply_parallel(_by_sum, num_processes=num_cores)
+		#src_sum = table.groupby(["src"]).apply_parallel(_by_sum, num_processes=num_cores)
+		#trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+		#src_sum = table.groupby(by = "src").sum()[["nij"]]
+		trg_sum, src_sum = _multi_group_by(table,["trg","src"],"nij")
+		table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
+		table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
+		table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
+		table["n.."] = table["nij"].sum()
+		#table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
+		#table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+		table = _multi_funcs(table,["mean_prior_probability","kappa"],[_mean_prior_prob,_kappa])
+		table = _multi_funcs(table,["score","var_prior_probability"],[_score,_var_prior_probability])
+		table = _multi_funcs(table,["alpha_prior","beta_prior"],[_alpha_prior,_beta_prior])
+		table = _multi_funcs(table,["alpha_post","beta_post"],[_alpha_post,_beta_post])
+		table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
+		table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
+		#table = _multi_funcs(table,["d","variance_cij"],[_d,_variance_cij])
+		table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
+		table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
+		table["sdev_cij"] = table["variance_cij"] ** .5
+		if not return_self_loops:
+			table = table[table["src"] != table["trg"]]
+		if undirected:
+			table = table[table["src"] <= table["trg"]]
+	else:
+		sys.stderr.write("Calculating NC score...\n")
+		table = table.copy()
+		src_sum = table.groupby(by = "src").sum()[["nij"]]
+		table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
+		trg_sum = table.groupby(by = "trg").sum()[["nij"]]
+		table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
+		table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
+		table["n.."] = table["nij"].sum()
+		table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
+		if calculate_p_value:
+			 table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
+			 return table[["src", "trg", "nij", "score"]]
+		table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+		table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
+		table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
+		table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
+		table["beta_prior"] = (table["mean_prior_probability"] / table["var_prior_probability"]) * (1 - (table["mean_prior_probability"] ** 2)) - (1 - table["mean_prior_probability"])
+		table["alpha_post"] = table["alpha_prior"] + table["nij"]
+		table["beta_post"] = table["n.."] - table["nij"] + table["beta_prior"]
+		table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
+		table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
+		table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
+		table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
+		table["sdev_cij"] = table["variance_cij"] ** .5
+		if not return_self_loops:
+			table = table[table["src"] != table["trg"]]
+		if undirected:
+			table = table[table["src"] <= table["trg"]]
+
 	return table[["src", "trg", "nij", "score", "sdev_cij"]]
 
 def _multi_get_result(args):
