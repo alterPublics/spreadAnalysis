@@ -64,6 +64,7 @@ def thresholding(table, threshold, keep_percent=None, visualize_max=1000000, ski
 	Returns:
 	The network backbone.
 	"""
+	print ("thresholding...")
 	table = table.copy()
 	if keep_percent is not None:
 		table["score"] = table["score"] - (float(threshold) * table["sdev_cij"])
@@ -151,27 +152,41 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 	else:
 		sys.stderr.write("Calculating NC score...\n")
 		table = table.copy()
+		print ("Grouping...")
 		src_sum = table.groupby(by = "src").sum()[["nij"]]
 		table = table.merge(src_sum, left_on = "src", right_index = True, suffixes = ("", "_src_sum"))
 		trg_sum = table.groupby(by = "trg").sum()[["nij"]]
 		table = table.merge(trg_sum, left_on = "trg", right_index = True, suffixes = ("", "_trg_sum"))
 		table.rename(columns = {"nij_src_sum": "ni.", "nij_trg_sum": "n.j"}, inplace = True)
+		print ("Getting Means...")
 		table["n.."] = table["nij"].sum()
 		table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 		if calculate_p_value:
 			 table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
 			 return table[["src", "trg", "nij", "score"]]
+		print ("Getting Kappa...")
 		table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
+		print ("Getting score...")
 		table["score"] = ((table["kappa"] * table["nij"]) - 1) / ((table["kappa"] * table["nij"]) + 1)
+		print ("Getting var_prior...")
 		table["var_prior_probability"] = (1 / (table["n.."] ** 2)) * (table["ni."] * table["n.j"] * (table["n.."] - table["ni."]) * (table["n.."] - table["n.j"])) / ((table["n.."] ** 2) * ((table["n.."] - 1)))
+		print ("Getting alpha prior...")
 		table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
+		print ("Getting beta_prior...")
 		table["beta_prior"] = (table["mean_prior_probability"] / table["var_prior_probability"]) * (1 - (table["mean_prior_probability"] ** 2)) - (1 - table["mean_prior_probability"])
+		print ("Getting alpha post...")
 		table["alpha_post"] = table["alpha_prior"] + table["nij"]
+		print ("Getting beta post...")
 		table["beta_post"] = table["n.."] - table["nij"] + table["beta_prior"]
+		print ("Getting pij...")
 		table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
+		print ("Getting nij...")
 		table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
+		print ("Getting d...")
 		table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
+		print ("Getting cij...")
 		table["variance_cij"] = table["variance_nij"] * (((2 * (table["kappa"] + (table["nij"] * table["d"]))) / (((table["kappa"] * table["nij"]) + 1) ** 2)) ** 2)
+		print ("Getting sdev_cij...")
 		table["sdev_cij"] = table["variance_cij"] ** .5
 		if not return_self_loops:
 			table = table[table["src"] != table["trg"]]
