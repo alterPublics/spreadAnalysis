@@ -174,14 +174,21 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 		table["alpha_prior"] = (((table["mean_prior_probability"] ** 2) / table["var_prior_probability"]) * (1 - table["mean_prior_probability"])) - table["mean_prior_probability"]
 		print ("Getting beta_prior...")
 		table["beta_prior"] = (table["mean_prior_probability"] / table["var_prior_probability"]) * (1 - (table["mean_prior_probability"] ** 2)) - (1 - table["mean_prior_probability"])
+		table.drop('mean_prior_probability', axis=1, inplace=True)
+		table.drop('var_prior_probability', axis=1, inplace=True)
 		print ("Getting alpha post...")
 		table["alpha_post"] = table["alpha_prior"] + table["nij"]
+		table.drop('alpha_prior', axis=1, inplace=True)
 		print ("Getting beta post...")
 		table["beta_post"] = table["n.."] - table["nij"] + table["beta_prior"]
+		table.drop('beta_prior', axis=1, inplace=True)
 		print ("Getting pij...")
 		table["expected_pij"] = table["alpha_post"] / (table["alpha_post"] + table["beta_post"])
+		table.drop('alpha_post', axis=1, inplace=True)
+		table.drop('beta_post', axis=1, inplace=True)
 		print ("Getting nij...")
 		table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
+		table.drop('beta_post', axis=1, inplace=True)
 		print ("Getting d...")
 		table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
 		print ("Getting cij...")
