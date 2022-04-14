@@ -188,7 +188,7 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 		table.drop('beta_post', axis=1, inplace=True)
 		print ("Getting nij...")
 		table["variance_nij"] = table["expected_pij"] * (1 - table["expected_pij"]) * table["n.."]
-		table.drop('beta_post', axis=1, inplace=True)
+		table.drop('expected_pij', axis=1, inplace=True)
 		print ("Getting d...")
 		table["d"] = (1.0 / (table["ni."] * table["n.j"])) - (table["n.."] * ((table["ni."] + table["n.j"]) / ((table["ni."] * table["n.j"]) ** 2)))
 		print ("Getting cij...")
