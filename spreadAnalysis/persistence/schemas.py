@@ -279,7 +279,12 @@ class Spread:
 		if method=="facebook_browser":
 			return str(data["user_id"])
 		if method=="vkontakte":
-			_val = data["actor"]["screen_name"]
+			if "screen_name" in data["actor"]:
+				_val = data["actor"]["screen_name"]
+			elif "id" in data["actor"]:
+				_val = data["actor"]["id"]
+			else:
+				_val = Spread._get_message_id(data=data,method=method)
 		if method=="reddit":
 			if "author_fullname" in data:
 				_val = data["author_fullname"]
@@ -632,7 +637,10 @@ class Spread:
 		if method=="google":
 			_val = 0
 		if method=="vkontakte":
-			_val = int(data["comments"]["count"])+int(data["likes"]["count"])+int(data["reposts"]["count"])
+			_val = 0
+			for it in ["comments","likes","reposts"]:
+				if it in data:
+					_val+=int(data[it]["count"])
 		if method=="reddit":
 			_val = int(data["score"])
 		if method=="majestic":

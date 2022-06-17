@@ -189,12 +189,15 @@ class CollectMongo:
         #scrp = Scraper(settings={"change_user_agent":True,"exe_path":self.conf.CHROMEDRIVER})
         #scrp.browser_init()
         scrp = None
-        clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=with_unpack)
-        if not isinstance(clean_url,list):
-            clean_url = clean_url["unpacked"]
-            clean_url = LinkCleaner().strip_backslash(clean_url)
+        if not is_domain:
+            clean_url = LinkCleaner(scraper=scrp).clean_url(org_url,with_unpack=with_unpack)
+            if not isinstance(clean_url,list):
+                clean_url = clean_url["unpacked"]
+                clean_url = LinkCleaner().strip_backslash(clean_url)
+            else:
+                clean_url = None
         else:
-            clean_url = None
+            clean_url = org_url
         if clean_url is not None and LinkCleaner().is_url_domain(clean_url) and not is_domain:
             clean_url = None
         elif clean_url is not None and is_domain and not LinkCleaner().is_url_domain(clean_url):
@@ -366,13 +369,14 @@ class CollectMongo:
 
         for org_url in org_urls:
             if hlp.is_some(org_url): continue
-            if org_url in cleaned_urls:
+            if org_url in cleaned_urls and not recollect:
                 cleaned_url = cleaned_urls[org_url]
             else:
-                try:
-                    cleaned_url = self.get_clean_url(org_url,is_domain=True)
-                except:
-                    cleaned_url = None
+                if True:
+                #try:
+                    cleaned_url = self.get_clean_url(org_url,is_domain=True,with_unpack=False)
+                #except:
+                    #cleaned_url = None
                 cleaned_urls[org_url]=cleaned_url
                 self.mdb.insert_one(self.mdb.database["clean_url"],
                     {"url":org_url,"clean_url":cleaned_url})
@@ -415,7 +419,8 @@ class CollectMongo:
                     l_start_date = l_end_date
 
     def collect(self,endpoint,title=None,platform_list=None,start_date=None \
-                ,end_date=None,skip_existing=True,iterations=[],actor_web=True,with_unpack=True):
+                ,end_date=None,skip_existing=True,iterations=[],actor_web=True,with_unpack=True,
+                custom_org_inputs=[],recollect=False):
 
         if endpoint == "domain": call_endpoint = "url"
         else: call_endpoint = endpoint
@@ -446,4 +451,6 @@ class CollectMongo:
                     org_inputs.update(set([d["Website"] for d in \
                         self.mdb.get_data_from_db(self.mdb.database["actor"])]))
             #org_inputs = ["https://www.rt.com/"]
-            self.domain_collect(org_inputs,start_date,end_date)
+            if len(custom_org_inputs) > 0:
+                org_inputs = [i for i in org_inputs if i in custom_org_inputs]
+            self.domain_collect(org_inputs,start_date,end_date,recollect=recollect)

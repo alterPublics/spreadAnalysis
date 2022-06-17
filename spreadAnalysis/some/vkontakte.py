@@ -35,7 +35,7 @@ class Vkontakte:
 
 		return next_page
 
-	def _get_data(self,data,call_url,params,wait_time=0,with_actor_info=True,start_date=None,end_date=None,max_results=6000):
+	def _get_data(self,data,call_url,params,wait_time=0,with_actor_info=True,start_date=None,end_date=None,max_results=65000):
 
 		res = Req.get_response(call_url,params=params,fail_wait_time=40,wait_time=wait_time)
 		data = self._update_output(res,data,start_date=start_date,end_date=end_date)

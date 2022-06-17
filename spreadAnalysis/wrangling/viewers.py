@@ -68,6 +68,55 @@ def get_links_to_actors(main_path,net_title):
 	out_df["FB_counts"]=out_df["Facebook Page"].map(fb_page_count)
 	out_df.to_csv(main_path+"/links_to_actors_{0}.csv".format(net_title),index=False)
 
+def get_domain_refs(main_path,net_title=None):
+
+	if net_title is None:
+		net_title = "no_net"
+	mdb = MongoSpread()
+	final_data = []
+	some_prefixes = ["tiktok.","instagram.","facebook.","twitter.","youtube.","vk.com","t.me","gab.com"]
+	#actor_aliases = mdb.get_actor_aliases(platform_sorted=True)
+	#platforms = ["Tiktok","Instagram","Facebook Page","Twitter","Youtube","Vkontakte","Telegram","Gab"]
+	#for actor in with_net_actors:
+		#for row in mdb.database["url_bi_network"].find({""})
+	prev_pulls = set([str(LinkCleaner().extract_special_url(d["input"])).lower() for d in mdb.database["pull"].find({"input_type":"domain"},{"input":1})])
+	shorten_domains = pd.read_csv("/home/alterpublics/projects/full_test/url_shorteners.csv")
+	shorten_domains = set([row["domain"] for i,row in shorten_domains.iterrows()])
+	domain_count = {}
+	domain_platform_query = [{"$group":{"_id":{"domain":"$domain","platform":"$platform"},"count":{"$sum":1}}}]
+	if net_title != "no_net":
+		with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.{0}".format(net_title):{"$exists":True}}) if "actor" in d}
+		by_net_query = {"$match": { "actor": { "$in": list(with_net_actors) } }}
+		domain_platform_query.insert(0, by_net_query)
+	for row in mdb.database["url_bi_network"].aggregate(domain_platform_query,allowDiskUse=True):
+		dom = row["_id"]["domain"]
+		pl = row["_id"]["platform"]
+		cnt = int(row["count"])
+		if dom not in shorten_domains:
+			if dom not in domain_count:
+				domain_count[dom]={"all_platforms":0}
+			if pl not in domain_count[dom]:
+				domain_count[dom][pl]=0
+			domain_count[dom][pl]+=cnt
+			domain_count[dom]["all_platforms"]+=cnt
+
+	for dom,pls in domain_count.items():
+		dom = LinkCleaner().remove_url_prefix(dom)
+		skipdom = False
+		dom_low = str(dom).lower()
+		if dom_low not in prev_pulls:
+			for pref in some_prefixes:
+				if pref in dom_low[:len(pref)]:
+					skipdom = True
+					break
+			if not skipdom:
+				temp_doc = dict(pls)
+				temp_doc["n_unique_platforms"]=len(pls)-1
+				temp_doc["domain"]=dom
+				final_data.append(temp_doc)
+
+	pd.DataFrame(final_data).to_csv(main_path+"/domains_shared_{0}.csv".format(net_title),index=False)
+
 
 def export_actor_to_pandas(file_path,query,net_name=None):
 
@@ -80,7 +129,7 @@ def export_actor_to_pandas(file_path,query,net_name=None):
 		if "net_data" in actor_doc:
 			del actor_doc["net_data"]
 		if "actor_name" not in actor_doc or actor_doc["actor_name"] is None or str(actor_doc["actor_name"]) == "":
-			print (actor_doc["actor_platform"])
+			#print (actor_doc["actor_platform"])
 			actor_doc["actor_name"]=actor_doc["actor_platform"]
 			actor_doc["platform"]="web"
 		df.append(actor_doc)

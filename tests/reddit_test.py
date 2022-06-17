@@ -9,8 +9,9 @@ url = "https://rt.com"
 url = "https://piopio.dk"
 url = "https://faktum-magazin.de"
 url = "https://www.youtube.com/watch?v=pQLcFs6H9NU"
-data = rdit.url_referals(url,start_date="2000-06-01")
-#data = rdit.domain_referals(url,start_date="2021-06-01")
+url = "thelancet.com"
+#data = rdit.url_referals(url,start_date="2000-06-01")
+data = rdit.domain_referals(url,start_date="2022-03-01")
 #print (data)
 #print (len(data))
 #print (len(data["output"]))

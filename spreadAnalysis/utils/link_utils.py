@@ -30,6 +30,10 @@ class LinkUtils:
 	def single_clean_url(self,url):
 
 		new_url = str(url)
+		if "youtube.com/" in str(new_url) and "v=" in str(new_url):
+			vcode = new_url.split("v=")[-1].split("&")[0]
+			new_url = "https://youtube.com/watch?v="+vcode
+
 		if "&fbclid" in new_url: new_url = new_url.split("&fbclid")[0]
 		if "?fbclid" in new_url: new_url = new_url.split("?fbclid")[0]
 		if "&ocid=" in new_url: new_url = new_url.split("&ocid=")[0]
@@ -243,7 +247,8 @@ class LinkUtils:
 				else:
 					special_url = self.extract_domain(full_url)
 			except:
-				print (full_url)
+				#print (full_url)
+				pass
 		else:
 			special_url = self.extract_domain(full_url)
 		if special_url is None:
@@ -424,7 +429,7 @@ class LinkCleaner(LinkUtils):
 				new_url = str(new_url).split("facebook.")[-1]
 				username = str(new_url).split("/")[1]
 				if len(username) < 2: username = str(url).split("/")[-2]
-				if "-" in username: username = username.split("-")[-1].strip()
+				if "-" in username and username.split("-")[-1].isdecimal(): username = username.split("-")[-1].strip()
 		elif "instagram." in url and "/" in url and "/" in str(url).split("instagram.")[-1]:
 			username = str(url).split("instagram.")[-1].split("/")[1]
 			if "/" in username: username = username.split("/")[0]

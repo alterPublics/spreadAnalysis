@@ -387,11 +387,12 @@ class MongoSpread(MongoDatabase):
 		if custom_title is None:
 			custom_title = custom_path.split("/")[-1]
 
-		for database, files in files_key_cols.items():
+		for database, files in sorted(files_key_cols.items()):
 			db = self.database[database]
 			file_path = files[0]
 			key_col = files[1]
-			prev_ids = self.get_ids_from_db(db,key_col)
+			prev_ids = {d[key_col]:d["org_project_title"] for d in db.find({})}
+			prev_ids_its = {d[key_col]:d["Iteration"] for d in db.find({})}
 			prev_data = self.get_data_from_db(db)
 			actor_df = self.get_custom_file_as_df(custom_path+"/"+file_path)
 			actor_df["org_project_title"]=custom_title
@@ -401,11 +402,15 @@ class MongoSpread(MongoDatabase):
 				actor_df["Domain"]=pd.to_numeric(actor_df["Domain"],downcast='integer')
 			cols = actor_df.columns
 			actor_docs = [{col:row[col] for col in cols} for i,row in actor_df.iterrows()]
+			new_actor_docs = []
 			for d in actor_docs:
-				if d[key_col] in prev_ids and d["org_project_title"] != custom_title and not override:
-					print ("found duplicate actor. {}. aborting.".format(d[key_col]))
-					sys.exit()
-
+				if d[key_col] in prev_ids and d["org_project_title"] != prev_ids[d[key_col]] and not override:
+					print ("found duplicate actor. {}. Skipping.".format(d[key_col]))
+				elif d[key_col] in prev_ids and d["org_project_title"] != prev_ids[d[key_col]] and (int(prev_ids_its[d[key_col]]) == 0 and int(d["Iteration"])!=0):
+					print ("found actor with iteration 0 in other project. {}. Skipping.".format(d[key_col]))
+				else:
+					new_actor_docs.append(d)
+			actor_docs = new_actor_docs
 			inserts, updates = [d for d in actor_docs if d[key_col] not in prev_ids],\
 				[d for d in actor_docs if d[key_col] in prev_ids]
 			self.insert_many(db,inserts)
@@ -643,6 +648,7 @@ class MongoSpread(MongoDatabase):
 		inter_short_urls = set([])
 		pool = Pool(num_cores)
 		insert_new_clean_count = 0
+		n_cleaned = set([])
 		for dom in shorten_domains:
 			net_urls = set(list(url_d["url"] for url_d in self.database["url_bi_network"].find({"domain":dom})))
 			for url_d in net_urls:
@@ -671,6 +677,7 @@ class MongoSpread(MongoDatabase):
 									self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
 									insert_new_clean_count+=1
 									print (new_url)
+									n_cleaned.add(old_url)
 									updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 							else:
 								continue
@@ -681,6 +688,8 @@ class MongoSpread(MongoDatabase):
 				if insert_new_clean_count > 100:
 					print (insert_new_clean_count)
 					insert_new_clean_count=0
+				print (len(n_cleaned))
+
 				#if url_count > 7:
 			print (len(updates))
 			if len(updates) > 0 and only_insert:

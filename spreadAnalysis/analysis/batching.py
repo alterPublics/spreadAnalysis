@@ -205,16 +205,19 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
 				max_upd_date = max_upd_date[0]["inserted_at"]
 		else:
 			max_upd_date = max_upd_date[0]["updated_at"]
-		max_upd_date = max_upd_date-timedelta(days=10)
+		max_upd_date = max_upd_date-timedelta(days=5)
 		if skip_existing: max_upd_date = datetime(2000,1,1)
 		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
 		random.shuffle(actor_obj_ids)
 	else:
-		actor_platform_ids = set(set([d["actor_platform"] for d in actor_metric_db.find({"actor_name":{"$exists":False}},{"actor_platform":1})]))
+		actor_platform_ids = set([])
+		already_updated = set(set([d["actor_platform"] for d in actor_metric_db.find({},{"actor_platform":1})]))
+		actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_platform_db.find({},{"actor_platform":1}) if d["actor_platform"] not in already_updated])))
+		print (len(actor_platform_ids))
+		actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_metric_db.find({"actor_name":{"$exists":False}},{"actor_platform":1})])))
 		print (len(actor_platform_ids))
 		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({},{"actor_platform":1,"_id":1}) if d["actor_platform"] in actor_platform_ids]
 		print (len(actor_obj_ids))
-		sys.exit()
 	for a_obj in actor_obj_ids:
 		actor_count += 1
 		if actor_count % 10000 == 0:

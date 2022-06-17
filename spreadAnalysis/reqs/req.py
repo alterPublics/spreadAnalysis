@@ -50,4 +50,7 @@ class Req:
             except Exception as e:
                 print (e)
                 try_again(fail_wait_time,i)
+            if "Access denied | api.pushshift.io" in str(response.text):
+                print ("LIMIT EXCEEDED. Exiting.")
+                sys.exit()
         return response
