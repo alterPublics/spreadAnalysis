@@ -678,7 +678,7 @@ class MongoSpread(MongoDatabase):
 								new_url = LinkCleaner().single_clean_url(new_url)
 								new_url = LinkCleaner().sanitize_url_prefix(new_url)
 								if not LinkCleaner().is_url_domain(new_url):
-									if old_url not in cleaned_url:
+									if old_url not in cleaned_urls:
 										self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
 										cleaned_urls.update({old_url:new_url})
 									else:
