@@ -92,7 +92,7 @@ def _multi_unpack_url(old_url):
 	scrp.browser_init()
 	new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
 
-	return new_url
+	return (old_url,new_url)
 
 class MongoDatabase:
 
@@ -183,6 +183,11 @@ class MongoDatabase:
 
 		doc["inserted_at"]=datetime.now()
 		db.insert_one(doc)
+
+	def update_one(self,db,doc):
+
+		doc["updated_at"]=datetime.now()
+		db.update_one(doc)
 
 	def write_many(self,db,docs,key_col,sub_mapping=None,only_insert=False):
 
@@ -638,7 +643,7 @@ class MongoSpread(MongoDatabase):
 		net_db.create_index([ ("actor", -1) ])
 		net_db.create_index([ ("domain", -1) ])
 
-	def update_clean_urls(self,shorten_domains,num_cores=12,only_insert=False):
+	def update_clean_urls(self,shorten_domains,num_cores=12,only_insert=False,update_cleaned=False):
 
 		cleaned_urls = {d["url"]:d["clean_url"] for d in self.database["clean_url"].find({})}
 		cleaned_urls.update({d["url"]:d["clean_url"] for d in self.database["clean_url"].find({}) if d["url"] is not None and d["clean_url"] is not None and d["url"]!=d["clean_url"] and d["url"]!=d["clean_url"][:-1]})
@@ -655,7 +660,7 @@ class MongoSpread(MongoDatabase):
 				url_count+=1
 				old_url = url_d
 				print (old_url)
-				if old_url in cleaned_urls:
+				if old_url in cleaned_urls and not update_cleaned:
 					new_url = cleaned_urls[old_url]
 					if old_url != new_url and new_url is not None:
 						updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
@@ -667,20 +672,24 @@ class MongoSpread(MongoDatabase):
 					inter_short_urls.add(old_url)
 					if len(inter_short_urls) == num_cores:
 						results = pool.map(_multi_unpack_url,list(inter_short_urls))
-						for new_url in results:
+						for old_url,new_url in results:
 							if new_url is not None and not isinstance(new_url,list):
 								new_url = new_url["unpacked"]
 								new_url = LinkCleaner().single_clean_url(new_url)
 								new_url = LinkCleaner().sanitize_url_prefix(new_url)
 								if not LinkCleaner().is_url_domain(new_url):
-									cleaned_urls.update({old_url:new_url})
-									self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
+									if old_url not in cleaned_url:
+										self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
+										cleaned_urls.update({old_url:new_url})
+									else:
+										self.update_one(self.database["clean_url"],{"url":old_url},{'$set': {"clean_url":new_url}})
 									insert_new_clean_count+=1
 									print (new_url)
 									n_cleaned.add(old_url)
 									updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 							else:
 								continue
+						print (len(n_cleaned))
 						inter_short_urls = set([])
 						print ("")
 						print ("")
@@ -688,7 +697,6 @@ class MongoSpread(MongoDatabase):
 				if insert_new_clean_count > 100:
 					print (insert_new_clean_count)
 					insert_new_clean_count=0
-				print (len(n_cleaned))
 
 				#if url_count > 7:
 			print (len(updates))
