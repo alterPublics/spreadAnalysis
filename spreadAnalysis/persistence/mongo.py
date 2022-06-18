@@ -659,7 +659,7 @@ class MongoSpread(MongoDatabase):
 			for url_d in net_urls:
 				url_count+=1
 				old_url = url_d
-				print (old_url)
+				#print (old_url)
 				if old_url in cleaned_urls and not update_cleaned:
 					new_url = cleaned_urls[old_url]
 					if old_url != new_url and new_url is not None:
@@ -686,13 +686,13 @@ class MongoSpread(MongoDatabase):
 										self.update_one(self.database["clean_url"],{"url":old_url},{'$set': {"clean_url":new_url}})
 										print ("UPDATING:   "+str({old_url:new_url}))
 									insert_new_clean_count+=1
-									print (new_url)
+									#print (new_url)
 									n_cleaned.add(old_url)
 									updates.append([{"url":old_url},{'$set': {"url":new_url,"domain":LinkCleaner().extract_special_url(new_url)}}])
 							else:
 								continue
 						print (len(n_cleaned))
-						sys.exit()
+						#sys.exit()
 						inter_short_urls = set([])
 						print ("")
 						print ("")
