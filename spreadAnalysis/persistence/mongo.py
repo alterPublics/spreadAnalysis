@@ -681,8 +681,10 @@ class MongoSpread(MongoDatabase):
 									if old_url not in cleaned_urls:
 										self.insert_one(self.database["clean_url"],{"url":old_url,"clean_url":new_url})
 										cleaned_urls.update({old_url:new_url})
+										print ("INSERTING:   "+str({old_url:new_url}))
 									else:
 										self.update_one(self.database["clean_url"],{"url":old_url},{'$set': {"clean_url":new_url}})
+										print ("UPDATING:   "+str({old_url:new_url}))
 									insert_new_clean_count+=1
 									print (new_url)
 									n_cleaned.add(old_url)
@@ -690,6 +692,7 @@ class MongoSpread(MongoDatabase):
 							else:
 								continue
 						print (len(n_cleaned))
+						sys.exit()
 						inter_short_urls = set([])
 						print ("")
 						print ("")
