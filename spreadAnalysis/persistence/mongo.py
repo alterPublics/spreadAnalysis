@@ -186,7 +186,7 @@ class MongoDatabase:
 
 	def update_one(self,db,query,value):
 
-		doc["updated_at"]=datetime.now()
+		value['$set']["updated_at"]=datetime.now()
 		db.update_one(query,value)
 
 	def write_many(self,db,docs,key_col,sub_mapping=None,only_insert=False):
