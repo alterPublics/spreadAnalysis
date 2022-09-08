@@ -224,7 +224,7 @@ class CollectMongo:
                             methods[platform["platform_source"]]=method
         return methods
 
-    def url_text_collect():
+    def url_text_collect(urls):
 
         urls = self.mdb.database["clean_url"]
         article = Article(url)
@@ -280,7 +280,11 @@ class CollectMongo:
             if cleaned_url is None:
                 continue
 
-            resolve_inputs = list(set([org_url,cleaned_url]))
+            if "https://youtube." in cleaned_url:
+                final_cleaned_url = cleaned_url.replace("https://","")
+                resolve_inputs = list(set([org_url,cleaned_url,final_cleaned_url]))
+            else:
+                resolve_inputs = list(set([org_url,cleaned_url]))
             for method_name, method in self.get_methods("url").items():
                 start_date, end_date = input_sd, input_ed
                 start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date,recollect=recollect)

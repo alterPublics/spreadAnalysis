@@ -24,11 +24,12 @@ url = "https://dagensblaeser.net/"
 #url = "https://dagensblaeser.net/2020/07/13/boligformand-i-rotterede-skuffet-over-hans-rotter"
 url = "https://ec.europa.eu/health/sites/default/files/vaccination/docs/2019-2022_roadmap_en.pdf"
 #print (urllib.parse.quote_plus('url:"https://ec.europa.eu/health/sites/default/files/vaccination/docs/2019-2022_roadmap_en.pdf"'))
-#sys.exit()
-#data = tw.url_referals(url,start_date="2019-01-11")
-#print (data)
-#print (len(data["output"]))
-#sys.exit()
+#sys.exit
+url = "https://youtube.com/watch?v=Y-TilircJZ4"
+data = tw.url_referals(url,start_date="2019-01-11")
+print (data)
+print (len(data["output"]))
+sys.exit()
 
 url = "https://denkorteavis.dk/"
 data = tw.domain_referals(url,start_date="2019-01-01",end_date="2021-04-04")

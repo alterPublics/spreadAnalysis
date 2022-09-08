@@ -300,7 +300,9 @@ class MongoSpread(MongoDatabase):
 						"url_bi_network":("url","actor_platform"),
 						"url_bi_network_coded":"uentity",
 						"actor_platform_post":"actor_platform",
-						"actor_metric":"actor_platform"  }
+						"actor_metric":"actor_platform",
+						"clean_url":"url",
+						"url_text":"url"  }
 
 	table_idx_cols = {   }
 

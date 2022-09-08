@@ -109,16 +109,21 @@ class Vkontakte:
 				"method":"vkontakte"}
 		start_date, end_date = hlp.get_default_dates(start_date,end_date)
 		call_url = self.base_url+"/newsfeed.search"
-		params = {"v":"5.103",
-					"start_time":hlp.to_default_date_format(start_date).replace().timestamp(),
-					"end_time":hlp.to_default_date_format(end_date).replace().timestamp(),
-					"access_token":random.choice(self.tokens)["access_token"],
-					"count":200,
-					"q":url,
-					"extended":1,
-					"fields":"screen_name"}
+		search_urls = [url]
+		if "youtube." in url and "watch?v=" in url:
+			search_urls.append("https://youtu.be/"+url.split("watch?v=")[-1].split("&")[0])
+		for search_url in search_urls:
+			params = {"v":"5.103",
+						"start_time":hlp.to_default_date_format(start_date).replace().timestamp(),
+						"end_time":hlp.to_default_date_format(end_date).replace().timestamp(),
+						"access_token":random.choice(self.tokens)["access_token"],
+						"count":200,
+						"q":search_url,
+						"extended":1,
+						"fields":"screen_name"}
+			data = self._get_data(data,call_url,params,wait_time=1,start_date=start_date,end_date=end_date)
 
-		return self._get_data(data,call_url,params,wait_time=1,start_date=start_date,end_date=end_date)
+		return data
 
 	def domain_referals(self,domain,start_date=None,end_date=None,full=True,max_results=None,interval=400,only_in_domain_urls=True):
 

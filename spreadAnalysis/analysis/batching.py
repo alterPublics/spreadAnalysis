@@ -16,6 +16,8 @@ from collections import defaultdict,Counter
 from spreadAnalysis.io.config_io import Config
 from datetime import datetime, timedelta
 import warnings
+from newspaper import Article
+from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne
 
 def bi_to_uni(data):
 
@@ -395,8 +397,8 @@ def find_actors(selection={},actors=[]):
 
 def multi_find_urls(org_urls):
 
-    prev_urls = set(find_urls(selection={},urls=org_urls))
-    return prev_urls
+	prev_urls = set(find_urls(selection={},urls=org_urls))
+	return prev_urls
 
 def find_urls(selection={},urls=[]):
 
@@ -818,7 +820,106 @@ def update_actor_data(actors=[],extra_data=None,extra_data_key="actor"):
 	all_actor_data = pd.DataFrame(all_actor_data)
 	return all_actor_data
 
+def update_cleaned_urls():
+
+	print ("updating cleaned urls")
+	mdb = MongoSpread()
+	e_cleaned = []
+	e_non_cleaned = []
+	clean_version = {}
+	rest = []
+	no_dups = set([])
+	count = 0
+	for url_cl in mdb.database["clean_url"].find().limit(5000000000):
+		count+=1
+		if url_cl["clean_url"] is not None:
+			if url_cl["url"] not in no_dups:
+				u_cl = mdb.database["url_bi_network"].find_one({"url":url_cl["clean_url"]})
+				if u_cl is not None:
+					e_cleaned.append(u_cl["url"])
+				if u_cl is None:
+					u = mdb.database["url_bi_network"].find_one({"url":url_cl["url"]})
+					if u is not None:
+						e_non_cleaned.append(u["url"])
+						clean_version[u["url"]]=url_cl["clean_url"]
+					else:
+						rest.append(url_cl["url"])
+				no_dups.add(url_cl["url"])
+		if count % 1000 == 0:
+			print (count)
+
+
+	for uc in e_non_cleaned:
+		print (str(uc)+"  -  "+str(clean_version[uc]))
+	print (len(e_cleaned))
+	print (len(e_non_cleaned))
+	print (len(rest))
+	#print (e_non_cleaned)
+	#sys.exit()
+
+	print ("writing cleaned urls to database")
+	bulks = []
+	for uc in e_non_cleaned:
+		bulks.append(UpdateOne({"url":uc},
+									{'$set': {"url":str(clean_version[uc]),"domain":LinkCleaner().extract_special_url(str(clean_version[uc]))}}))
+	mdb.database["url_bi_network"].bulk_write(bulks)
+	print ("done writing to database!")
+
+def get_articles(url):
+
+	print ()
+	print (url)
+	print ()
+	try:
+		article = Article(url)
+		article.download()
+		article.parse()
+		print (article.text)
+		print ()
+		print ()
+		print ()
+		doc = {"url":url,"text":str(article.text),"succes":True}
+	except Exception as e:
+		print ()
+		print (e)
+		print ()
+		doc = {"url":url,"text":str(e),"succes":False}
+
+	return doc
+
+def update_url_texts(num_cores=12):
+
+	from newspaper import Config as NConfig
+	user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'
+	config = Config()
+	config.browser_user_agent = user_agent
+	mdb = MongoSpread()
+	project = "rt_sputnik"
+	prev_urls = set([d["url"] for d in mdb.database["url_texts"].find({},{"url"})])
+	pri_domains = ['de.sputniknews.com', 'sputniknews.com',"de.rt.com","rt.com"]
+	domains = list(set([LinkCleaner().strip_backslash( LinkCleaner().remove_url_prefix(d["Website"])) for d in mdb.database["actor"].find({"org_project_title":"rt_sputnik","Iteration":0})]))
+	domains = [d for d in domains if d is not None and d not in pri_domains]
+	pri_urls = list(set([d["url"] for d in mdb.database["url_bi_network"].find({"domain":{"$in":pri_domains}})]))
+	urls = list(set([d["url"] for d in mdb.database["url_bi_network"].find({"domain":{"$in":domains}})]))
+	print (len(domains))
+	print (len(pri_domains))
+	print (len(urls))
+	print (len(pri_urls))
+	"""pri_urls = ['https://de.rt.com/live/114494-live-pressekonferenz-von-sebastian-kurz', 'https://rt.com/newsline/497774-eu-ministers-belarus-sanctions', 'https://rt.com/op-ed/525478-china-cnn-wolf-warrior-diplomacy', 'https://rt.com/news/449550-france-putin-children-disinfo', 'https://sputniknews.com/asia/202001291078167767-significant-breakthrough-australian-scientists-succeeded-to-recreate-coronavirus-outside-china', 'https://sputniknews.com/20211014/full-scale-us-thai-military-drills-to-be-conducted-next-year-us-military-says-1089917386.html', 'https://sputniknews.com/radio-political-misfits/202104201082674671-new-wave-of-protests-after-more-police-killings-the-long-fight-at-amazon', 'https://rt.com/rtmobile/news/latest/451020/html', 'https://rt.com/rtmobile/news/latest/461646/html', 'https://de.rt.com/2bod', 'https://de.rt.com/inland/115746-streit-um-ausgangssperren-lauterbach-kritisiert', 'https://rt.com/usa/473631-san-diego-shooting-children', 'https://sputniknews.com/russia/201907171076276602-russian-universities', 'https://sputniknews.com/videoclub/202108271083718277-mummy-im-your-little-helper-golden-retriever-puppy-steals-cleaning-cloths', 'https://sputniknews.com/photo/202004221079048263-lenin-monuments-around-the-world', 'https://sputniknews.com/20220101/shedding-of-the-soul-new-book-reveals-aviciis-journal-entries-on-inner-demons-health-issues---1091954582.html', 'https://de.rt.com/europa/130923-junkers-im-sturzflug-wie-sechsjahrige-stalingrader-schlacht-okkupation-ueberlebte', 'https://de.rt.com/inland/111882-erster-wahlgang-merz-und-laschet-vorne/Laschet', 'https://de.sputniknews.com/politik/20190411324661444-wikileaks-assange-london-festnahme', 'https://rt.com/news/429282-trump-kim-singapore-impersonation', 'https://de.rt.com/meinung/119385-studie-die-meisten-positiv-getesteten-sind-nicht-infektioes/amp/?__twitter_impression=true', 'https://rt.com/news/548727-canada-covid-mandates-saskatchewan/?utm_referrer=https%3A%2F%2Fzen.yandex.com%2F%3Ffromzen%3Dabro', 'https://sputniknews.com/latam/202104101082591267-argentine-government-to-launch-legal-action-against-ex-president-over-imf-loan', 'https://sputniknews.com/middleeast/201909201076845495-militants-block-humanitarian-corridor-to-idlibs-abu-al-duhur-checkpoint--syrian-army', 'https://sputniknews.com/military/201904241074410203-norway-frigate-losses', 'https://sputniknews.com/news/20160512/1039528652/911-saudi-obama-terror-fbi.html', 'https://sputniknews.com/amp/radio_the_critical_hour/202009051080370875-covid-19-model-predicts-us-death-toll-will-surpass-410000-by-january-1/?__twitter_impression=true', 'https://rt.com/news/513795-hong-kong-ambush-lockdowns-covid', 'https://sputniknews.com/viral/201909271076907025-following-in-ivankas-footsteps-jennifer-lopez-attends-public-event-bra-less', 'https://sputniknews.com/20211210/ufc-269-closes-out-2021-pay-per-view-schedule-after-record-year-of-profits-for-company-1091426972.html', 'https://rt.com/usa/529309-georgia-highway-bridge-truck', 'https://sputniknews.com/20220308/ex-ukrainian-president-yanukovich-urges-zelensky-to-stop-bloodshed-at-any-price-reach-peace-deal-1093678034.html', 'https://sputniknews.com/photo/201903251073512085-kazakhstan-beauty-nowruz', 'https://rt.com/pop-culture/540942-wheel-of-time-woke', 'https://sputniknews.com/middleeast/201907281076382657-intra-afghan-talks-usa-deal-taliban', 'https://de.sputniknews.com/panorama/20200407326818063-klinische-tests-praeparate-gegen-coronavirus-russland', 'https://sputniknews.com/us/202105051082811083-gop-heavyweights-slam-big-tech-over-trump-facebook-ban-fueling-2024-campaign-rumors', 'https://rt.com/business/449508-bear-market-risk-shiller', 'https://de.rt.com/international/116909-gesprache-zur-rettung-atomdeals-es', 'https://sputniknews.com/news/201905141074980145-US-Law-Enforcement-Officials-Raid-Venezuelan-Embassy-Washington-DC']"""
+	temp_urls = []
+	for url_p in [pri_urls,urls]:
+		for url in url_p:
+			if url not in prev_urls:
+				temp_urls.append(url)
+				if len(temp_urls) == num_cores:
+					pool = Pool(num_cores)
+					results = pool.map(get_articles,temp_urls)
+					pool.close()
+					mdb.insert_many(mdb.database["url_texts"],list(results))
+					temp_urls = []
+
 if __name__ == "__main__":
 	#update_actor_message()
-	update_agg_actor_metrics(skip_existing=True)
+	#update_agg_actor_metrics(skip_existing=True)
+	update_url_texts()
 	sys.exit()

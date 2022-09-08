@@ -32,12 +32,16 @@ class Reddit:
 				"output":[],
 				"method":"reddit"}
 		start_date, end_date = hlp.get_default_dates(start_date,end_date)
-		for call_url in [self.base_url+"/search/comment",self.base_url+"/search/submission"]:
-			params = {"q":url,
-						"before":int(hlp.to_default_date_format(end_date).replace().timestamp()),
-						"after":int(hlp.to_default_date_format(start_date).replace().timestamp()),
-						"size":500}
-			data = self._get_data(data,call_url,params,wait_time=0.19)
+		search_urls = [url]
+		if "youtube." in url and "watch?v=" in url:
+			search_urls.append(url.split("watch?v=")[-1].split("&")[0])
+		for search_url in search_urls:
+			for call_url in [self.base_url+"/search/comment",self.base_url+"/search/submission"]:
+				params = {"q":search_url,
+							"before":int(hlp.to_default_date_format(end_date).replace().timestamp()),
+							"after":int(hlp.to_default_date_format(start_date).replace().timestamp()),
+							"size":500}
+				data = self._get_data(data,call_url,params,wait_time=0.19)
 
 		return data
 

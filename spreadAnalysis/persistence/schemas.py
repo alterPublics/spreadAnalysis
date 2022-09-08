@@ -541,7 +541,7 @@ class Spread:
 			if "languageCode" in data:
 				_val = str(data["languageCode"])
 			else:
-				_val = hlp.get_lang_and_conf(Spread._get_message_text(data=data,method=method),model=model)["lang"]
+				_val = hlp.get_lang_and_conf(str(data["message"]),model=model)["lang"]
 		if method=="twitter2":
 			_val = str(data["lang"])
 		if method=="crowdtangle_app":

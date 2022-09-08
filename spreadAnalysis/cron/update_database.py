@@ -7,10 +7,13 @@ from datetime import datetime
 if __name__ == "__main__":
 
 	print ("starting update")
+	print (datetime.today())
 	start_time = time.time()
 	all_time = time.time()
 	mdb = MongoSpread()
 	mdb.update_url_bi_network(new=False)
+	#btc.update_cleaned_urls()
+	#sys.exit()
 	#mdb.repart_url_bi_net()
 	#sys.exit()
 	print("--- %s seconds --- to update url network" % (time.time() - start_time))
