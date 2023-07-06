@@ -9,11 +9,11 @@ actor_urls = ["https://twitter.com/Exakt24"]
 conf = Config()
 tw = Twitter2(conf.get_auth()["twitter2"])
 
-query = '"danske værdier"'
-#data = tw.query_content(query,start_date="2021-12-12")
-#print (data)
-#print (len(data["output"]))
-#sys.exit()
+query = '#dkmedier'
+data = tw.query_content(query,start_date="2023-04-01")
+print (data)
+print (len(data["output"]))
+sys.exit()
 
 #actors = tw._user_urls_to_ID(actor_urls)
 actors = ["https://twitter.com/Alpenschau"]

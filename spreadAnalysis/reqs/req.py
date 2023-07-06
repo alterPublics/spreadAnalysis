@@ -25,6 +25,7 @@ class Req:
             try:
                 response = requests.get(url,params=params,auth=auth,headers=headers,timeout=timeout)
                 #print (response.url)
+                #print(response.status_code)
                 #print (response.text)
                 #sys.exit()
             except:

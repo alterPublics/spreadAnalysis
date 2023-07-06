@@ -14,6 +14,13 @@ def to_default_date_format(date_str):
     else:
         return date_str
 
+def to_default_datetime_format(date_str):
+
+    if isinstance(date_str,str):
+        return datetime.strptime(date_str[:20],"%Y-%m-%d %H:%M:%S")
+    else:
+        return date_str
+
 def get_default_dates(start_date,end_date):
 
     if start_date is None:
@@ -66,6 +73,11 @@ def get_diff_in_days(start_date,end_date):
 
     diff = to_default_date_format(end_date)-to_default_date_format(start_date)
     return diff.days
+
+def get_diff_in_seconds(start_date,end_date):
+
+    diff = to_default_datetime_format(end_date)-to_default_datetime_format(start_date)
+    return diff.total_seconds()
 
 def chunks(lst, n):
     for i in range(0, len(lst), n):

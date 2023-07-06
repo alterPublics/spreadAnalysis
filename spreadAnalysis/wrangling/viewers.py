@@ -19,16 +19,41 @@ from spreadAnalysis.persistence.mongo import MongoSpread
 
 some_prefixes = ["facebook.","twitter.","vk.com","t.me"]
 
+def get_non_collected_actors(main_path,net_title):
+
+	mdb = MongoSpread()
+	platforms = [("twitter","Twitter"),("facebook","Facebook Page"),("vkontakte","Vkontakte"),("instagram","Instagram")]
+	out_df = []
+	actor_aliases = mdb.get_actor_aliases(platform_sorted=True)
+	for platform,avl_platform in platforms:
+		actor_query = {"net_data.{0}".format(net_title):{"$exists":True},"platform":platform}
+		for adoc in mdb.database["actor_metric"].find(actor_query):
+			if adoc["actor_username"] not in actor_aliases[avl_platform]:
+				if "grey" in adoc["net_data"][net_title]["political"]: continue
+				out_df.append(dict(adoc))
+
+	out_df = pd.DataFrame(out_df)
+	out_df[["actor_username","interactions_mean","n_posts","lang","platform","followers_mean","n_unique_domains_shared"]].to_csv(main_path+"/not_yet_actors_{0}.csv".format(net_title),index=False)
+
+	langs = set(["und"])
+	out_df = out_df[out_df["lang"].isin(langs)]
+	#out_df = out_df[(out_df["n_posts"]>50) & (out_df["n_posts"] < 1500)]
+	out_df[["actor_username","interactions_mean","n_posts","lang","platform","followers_mean","n_unique_domains_shared"]].to_csv(main_path+"/not_yet_actors_{0}_filtered.csv".format(net_title),index=False)
+
 def get_links_to_actors(main_path,net_title):
 
 	mdb = MongoSpread()
 	final_data = []
 	actor_aliases = mdb.get_actor_aliases(platform_sorted=True)
-	with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.{0}".format(net_title):{"$exists":True}}) if "actor" in d}
+	if net_title is None:
+		with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find() if "actor" in d}
+	else:
+		with_net_actors = {d["actor"] for d in mdb.database["actor_metric"].find({"net_data.{0}".format(net_title):{"$exists":True}}) if "actor" in d}
 	platforms = ["Tiktok","Instagram","Facebook Page","Twitter","Youtube","Vkontakte","Telegram","Gab"]
 	some_prefixes = ["tiktok.","instagram.","facebook.","twitter.","youtube.","vk.com/","t.me/","gab.com/"]
 	fb_page_count = {}
 	for pre,platform in list(zip(some_prefixes,platforms)):
+		if not platform == "Telegram":continue
 		print (platform)
 		new_accounts = set([])
 		if len(with_net_actors) < 15000:
@@ -66,7 +91,7 @@ def get_links_to_actors(main_path,net_title):
 		print (len(new_accounts))
 	out_df = pd.DataFrame(final_data)
 	out_df["FB_counts"]=out_df["Facebook Page"].map(fb_page_count)
-	out_df.to_csv(main_path+"/links_to_actors_{0}.csv".format(net_title),index=False)
+	out_df.to_csv(main_path+"/links_to_actors_{0}_only_tel.csv".format(net_title),index=False)
 
 def get_domain_refs(main_path,net_title=None):
 
@@ -292,141 +317,6 @@ def print_urls_from_urls_data(main_path,data_type="referal_data"):
 					print (sim_score)
 					print (url+" : "+source_list)
 					print (url2+" : "+source_list)
-
-def print_urls_from_all_data(main_path):
-
-	#wrang.connect_actors_to_urls(main_path)
-	start_date = "2019-01-01"
-	end_date = "2020-01-01"
-	actor_data_path = f'{main_path}/actor_data.p'
-	referal_data_path = f'{main_path}/referal_data.p'
-	actor_data = FlatFile(actor_data_path)
-	referal_data = FlatFile(referal_data_path)
-	already_printed = set([])
-	already_printed = set(list(pd.read_excel(main_path+"/Urls.xlsx",engine="openpyxl")["Url"]))
-	sorted_urls = {}
-	seen_sources = set([])
-	actor_sources = {}
-	#project = Project(main_path,init=True,actor_meta_file="Actors.xlsx").get_project(format="dict")
-	actors_and_links = {}
-	print ("first loop")
-	for actor,dat in actor_data.data.items():
-		for url in dat["links_to_own_website"]:
-			if url not in actors_and_links: actors_and_links[url]=actor
-	for url,dat in referal_data.data.items():
-		#continue
-		if url in already_printed or len(str(url)) < 5 or LinkCleaner().is_url_domain(url): continue
-		sorted_urls[url]={"url":url,"source_list":[],"hits":0,"seen":0,"source_hits":0,"in_both":False,"actors":set([]),"actor_source":set([])}
-		hits = 0
-		source_list = set([])
-		source_hits = 0
-		for source in set(gvar.SOURCES.values()):
-			if source in dat["data"]:
-				hits += len(dat["data"][source]["output"])
-				source_hits += 1
-				source_list.add(source)
-				seen_sources.add(source)
-				for row in dat["data"][source]["output"]:
-					row_date = Spread._get_date(data=row,method=source)
-					#if start_date is not None:
-						#if hlp.to_default_date_format(end_date) < hlp.to_default_date_format(row_date):
-							#continue
-					print (row_date)
-					actor = Spread._get_actor_username(data=row,method=source)
-					sorted_urls[url]["actors"].add(actor)
-					if actor not in actor_sources: actor_sources[actor]=set([])
-					actor_sources[actor].add(source)
-				if url in actors_and_links:
-					actor = actors_and_links[url]
-					sorted_urls[url]["actors"].add(actor)
-					sorted_urls[url]["actor_source"].add((actor,source))
-					if actor not in actor_sources: actor_sources[actor]=set([])
-					actor_sources[actor].add(source)
-		sorted_urls[url]["hits"]=hits
-		sorted_urls[url]["source_list"]=source_list
-		sorted_urls[url]["seen"]=len(source_list)*np.log(hits+1)
-		sorted_urls[url]["source_hits"]=source_hits
-
-	print ("second loop")
-	true_actors = set({})
-	for actor,dat in actor_data.data.items():
-		if str(dat["meta"]["Iteration"]) != "0" and str(dat["meta"]["Iteration"]) != "0.0":
-			continue
-		for source in set(gvar.SOURCES.keys()):
-			if source in dat["data"]:
-				for row in dat["data"][source]["output"]:
-					if row is not None:
-						row_date = Spread._get_date(data=row,method=gvar.SOURCES[source])
-						#if start_date is not None:
-							#if hlp.to_default_date_format(end_date) < hlp.to_default_date_format(row_date):
-								#continue
-						print (row_date)
-						#actor_username = Spread._get_actor_username(data=row,method=gvar.SOURCES[source])
-						true_actors.add(actor)
-						if actor not in actor_sources: actor_sources[actor]=set([])
-						actor_sources[actor].add(gvar.SOURCES[source])
-						url = Spread._get_message_link(data=row,method=gvar.SOURCES[source])
-						print (url)
-						is_some_prefix = False
-						if url in already_printed or len(str(url)) < 5 or LinkCleaner().is_url_domain(url): continue
-						for som in some_prefixes:
-							if som in str(url): is_some_prefix = True
-						if is_some_prefix: continue
-						interacts = Spread._get_interactions(data=row,method=gvar.SOURCES[source])
-						if url in sorted_urls:
-							if interacts is None: interacts=0
-							if gvar.SOURCES[source] not in sorted_urls[url]["source_list"]:
-								sorted_urls[url]["source_hits"]+=1
-							sorted_urls[url]["hits"]+=1
-							sorted_urls[url]["seen"]+=interacts
-							sorted_urls[url]["source_list"].add(gvar.SOURCES[source])
-							sorted_urls[url]["in_both"]=True
-							sorted_urls[url]["actors"].add(actor)
-							sorted_urls[url]["actor_source"].add((actor,gvar.SOURCES[source]))
-							seen_sources.add(gvar.SOURCES[source])
-						else:
-							sorted_urls[url]={"url":url,"source_list":set([gvar.SOURCES[source]]),"hits":1,"seen":interacts,"source_hits":1,"in_both":False,"actors":set([actor]),"actor_source":set([(actor,gvar.SOURCES[source])])}
-	sorted_urls = [tuple(d.values()) for d in list(sorted_urls.values())]
-	for t in sorted(sorted_urls, key=operator.itemgetter(3), reverse=False):
-		print (" - ".join([str(t[0]),str(t[1]),str(t[2]),str(t[3]),str(t[4]),str(t[5])]))
-	#sys.exit()
-
-	final_urls = {}
-	for actor, sources in actor_sources.items():
-		final_urls[actor]={source:[] for source in sources}
-	for bol in [True,False]:
-		bol_count=0
-		for t in sorted(sorted_urls, key=operator.itemgetter(3), reverse=True):
-			bol_count+=1
-			if bol == t[5] or bol != t[5]:
-				for actor,source in t[-1]:
-					#print (final_urls[actor])
-					#print (actor_sources[actor])
-					if len(final_urls[actor][source]) < int((48000/len(actor_data.data.items()))/len(actor_sources[actor])):
-						if t[0] is not None:
-							final_urls[actor][source].append((str(t[0])," - ".join([str(t[0]),str(t[1]),str(t[2]),str(t[3]),str(t[4]),str(t[5])])))
-			if bol == True and bol_count > int(len([u for u in sorted_urls if u[5] == True])/2):
-				break
-	final_url_count = 0
-	csv_rows = []
-	seen_urls = set([])
-	for actor,sources in final_urls.items():
-		print (actor.upper())
-		print ()
-		for source, urls in sources.items():
-			print ("\t"+source)
-			for url in urls:
-				if not url[0] in seen_urls:
-					print ("\t\t"+url[1])
-					final_url_count+=1
-					csv_rows.append([url[0],"0","0",actor,source])
-					seen_urls.add(url[0])
-		print ()
-		print ()
-	print (final_url_count)
-	print (len(sorted_urls))
-	print (len([u for u in sorted_urls if u[5] == True]))
-	pd.DataFrame(csv_rows, columns=["Url","Iteration","Domain","Org Actor","Org Source"]).to_csv(main_path+"/url_print.csv")
 
 def choose_domains_from_list(inputs,export_path):
 

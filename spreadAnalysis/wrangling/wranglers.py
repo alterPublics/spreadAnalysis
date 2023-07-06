@@ -237,3 +237,41 @@ def restructure_old_data(main_path):
 
     new_referal_data.simple_update({})
     new_actor_data.simple_update({})
+
+def make_mainstream_list(main_path):
+
+    mdb = MongoSpread()
+    main_data = []
+    an_to_ap = {d["actor_name"]:d["actor_platform"] for d in mdb.database["actor_metric"].find({},{"actor_name":1,"actor_platform":1}).limit(100000000000) if "actor_name" in d}
+    country_to_sheet = {"dk":"da","sv":"sv","de":"de","au":"au_de"}
+    all_parsed = 0
+    for country in ["dk","sv","au","de"]:
+    #for country in ["alt_dk (no DF)","alt_au (no FPÖ)"]:
+        fil_path = main_path+"/alt_{}_coding.xlsx".format(country)
+        if country == "dk": fil_path = main_path+"/{}.xlsx".format("alt_dk (no DF)")
+        if country == "au": fil_path = main_path+"/{}.xlsx".format("alt_au (no FPÖ)")
+        #fil_path = main_path+"/{}.xlsx".format(country)
+        for sheet in [country_to_sheet[country],"other"]:
+            cdata = pd.read_excel(fil_path,sheet_name=sheet)
+            if country == "de":
+                #cdata_filtered = cdata[(cdata["Mainstream=1"]==1) | (cdata["Ny mainstream=1"]==1)]
+                cdata_filtered = cdata[(cdata["Mainstream=1"]==1) | (cdata["Ny mainstream=1"]==1) | (cdata["Note 1"]=="DL") | (cdata["Note 2"]=="taz")]
+            else:
+                cdata_filtered = cdata[(cdata["Mainstream=1"]==1) | (cdata["Ny mainstream=1"]==1)]
+            print (country)
+            print (sheet)
+            print (len(cdata_filtered))
+            all_parsed += len(cdata_filtered)
+            for i,row in cdata_filtered.iterrows():
+                if row["Actor Name"] in an_to_ap:
+                    ap = an_to_ap[row["Actor Name"]]
+                    doc = {"actor_platform":ap,"cat":"mainstream"}
+                    main_data.append(doc)
+                else:
+                    pass
+                    #print ("Fail to find")
+    print ()
+    print (all_parsed)
+    print (len(main_data))
+    pd.DataFrame(main_data).to_csv(main_path+"/altmed_mainstream_no_pop.csv",index=False)
+    #pd.DataFrame(main_data).to_csv(main_path+"/altmed_mainstream_SMALL.csv",index=False)

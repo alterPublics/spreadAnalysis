@@ -24,8 +24,9 @@ ct = Crowdtangle(conf.get_auth()["crowdtangle"])
 actor = "https://www.instagram.com/steen2620"
 actor = "dkdox.tv"
 query = '"danske værdier"'
-#data = ct.actor_content(actor,start_date="2021-08-01")
+data = ct.actor_content(actor,start_date="2022-08-01")
+sys.exit()
 
-data = ct.query_referals(query,start_date="2021-12-12")
+#data = ct.query_referals(query,start_date="2021-12-12")
 print (data)
 print (len(data["output"]))

@@ -259,7 +259,6 @@ class MongoSpread(MongoDatabase):
 	custom_file_schema = {  "actor":("Actors.xlsx","Actor"),
 							"query":("Queries.xlsx","Query"),
 							"url":("Urls.xlsx","Url")  }
-	del custom_file_schema["query"]
 
 	avlb_platforms = {"Facebook Page":"crowdtangle",
 						"Facebook Group":"crowdtangle",
@@ -390,6 +389,8 @@ class MongoSpread(MongoDatabase):
 		# Import requires a unique Actor designation in the column
 		if files_key_cols is None:
 			files_key_cols = self.custom_file_schema
+			#del self.custom_file_schema["actor"]
+			#del self.custom_file_schema["url"]
 
 		if custom_title is None:
 			custom_title = custom_path.split("/")[-1]
@@ -408,7 +409,14 @@ class MongoSpread(MongoDatabase):
 			if "Domain" in actor_df.columns:
 				actor_df["Domain"]=pd.to_numeric(actor_df["Domain"],downcast='integer')
 			cols = actor_df.columns
-			actor_docs = [{col:row[col] for col in cols} for i,row in actor_df.iterrows()]
+			it0_seen = set([])
+			actor_docs = []
+			for i,row in actor_df[actor_df["Iteration"]==0].iterrows():
+				it0_seen.add(row[key_col])
+				actor_docs.append({col:row[col] for col in cols})
+			for i,row in actor_df.iterrows():
+				if not row[key_col] in it0_seen:
+					actor_docs.append({col:row[col] for col in cols})
 			new_actor_docs = []
 			for d in actor_docs:
 				if d[key_col] in prev_ids and d["org_project_title"] != prev_ids[d[key_col]] and not override:
@@ -564,37 +572,51 @@ class MongoSpread(MongoDatabase):
 		if len(batch_insert) > 0:
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 
-	def update_url_bi_network(self,new=False):
+	def update_url_bi_network(self,new=False,custom_query=None):
 
 		net_db = self.database["url_bi_network"]
-		try:
-			net_db.drop_index('actor_-1')
-			net_db.drop_index('domain_-1')
-		except:
-			pass
-		if new:
-			net_db.drop()
-			net_db = self.database["url_bi_network"]
-			self.create_indexes()
-		max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
-		if max_net_date is None or len(max_net_date) < 1:
-			max_net_date = datetime(2000,1,1)
-		else:
-			if "updated_at" in max_net_date[0]:
-				max_net_date = max_net_date[0]["updated_at"]
-			elif "inserted_at" in max_net_date[0]:
-				max_net_date = max_net_date[0]["inserted_at"]
-			max_net_date = max_net_date-timedelta(days=1)
 		aliases = self.get_aliases()
 		actor_aliases = self.get_actor_aliases(platform_sorted=False)
 		post_db = self.database["post"]
-		cur = post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]})
+		if custom_query is not None:
+			if custom_query == "instagram":
+				post_obj_ids = []
+				for d in self.database["actor_platform_post"].find({"platform":"instagram"}):
+					for poid in d["post_obj_ids"]:
+						post_obj_ids.append(poid)
+		else:
+			try:
+				net_db.drop_index('actor_-1')
+				net_db.drop_index('domain_-1')
+			except:
+				pass
+			if new:
+				net_db.drop()
+				net_db = self.database["url_bi_network"]
+				self.create_indexes()
+				net_db.drop_index('actor_-1')
+				net_db.drop_index('domain_-1')
+			max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
+			if max_net_date is None or len(max_net_date) < 1:
+				max_net_date = datetime(2000,1,1)
+			else:
+				if "updated_at" in max_net_date[0]:
+					max_net_date = max_net_date[0]["updated_at"]
+				elif "inserted_at" in max_net_date[0]:
+					max_net_date = max_net_date[0]["inserted_at"]
+				max_net_date = max_net_date-timedelta(days=4)
+			cur = post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]})
 		next_post = True
 		batch_insert = {}
 		seen_ids = set([])
 		count = 0
 		while next_post is not None:
 			count += 1
+			"""if custom_query is not None:
+				if len(post_obj_ids) > 0:
+					cur = self.database["post"].find({"_id":post_obj_ids.pop()})
+				else:
+					break"""
 			next_post = next(cur, None)
 			if next_post is not None:
 				post = next_post
@@ -633,6 +655,7 @@ class MongoSpread(MongoDatabase):
 								batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
 													"actor":actor,"actor_label":actor_label,"platform":platform,
 													"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+
 							batch_insert[(extra_url,actor)]["message_ids"].append(post["message_id"])
 
 					if len(batch_insert) >= 10000:

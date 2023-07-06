@@ -71,7 +71,7 @@ class Spread:
 	def _get_message_text(method=None,data=None):
 		_val = None
 		if method=="crowdtangle":
-			text_fields = [str(data[field]) for field in ["title","caption","description","message"] if field in data]
+			text_fields = [str(data[field]) for field in ["message"] if field in data]
 			_val = str(" ".join(text_fields))
 		if method=="twitter2":
 			_val = str(data["text"])
@@ -385,6 +385,7 @@ class Spread:
 				_val = int(data["followers_count"])
 		if method=="fourchan":
 			_val = None
+
 		return _val
 
 	@staticmethod
@@ -1005,33 +1006,6 @@ class Spread:
 				_val = data["referenced_tweets"][0]["id"]
 		return _val
 
-	def _get_has_image(method=None,data=None):
-
-		_val = None
-		if method=="twitter2":
-			if "attachments" in data and "media_keys" in data["attachments"]:
-				_val = True
-			else:
-				_val = False
-		return _val
-
-	def _get_device_source(method=None,data=None):
-
-		_val = None
-		if method=="twitter2":
-			if "source" in data:
-				_val = str(data["source"])
-		return _val
-
-	def _get_hashtag_count(method=None,data=None):
-
-		_val = 0
-		if method=="twitter2":
-			if "entities" in data and "hashtags" in data["entities"]:
-				_val = len(data["entities"]["hashtags"])
-		return _val
-
-
 
 #FACEBOOK SPECIFIC
 
@@ -1069,27 +1043,21 @@ class Spread:
 		if method=="crowdtangle":
 			if "subscriberCount" in data:
 				_val = data["subscriberCount"]
-		if method=="youtube":
-			if "statistics" in data["actor"] and "subscriberCount" in data["actor"]["statistics"]:
-				_val = int(data["actor"]["statistics"]["subscriberCount"])
 		return _val
 
 	def _get_like_count(method=None,data=None):
 		_val = 0
 		if method=="crowdtangle":
 			_val = data["statistics"]["actual"]["likeCount"]
-		if method=="youtube":
-			if "statistics" in data and "likeCount" in data["statistics"]:
-				_val = data["statistics"]["likeCount"]
 		return _val
+
+
+
 
 	def _get_comment_count(method=None,data=None):
 		_val = 0
 		if method=="crowdtangle":
 			_val = data["statistics"]["actual"]["commentCount"]
-		if method=="youtube":
-			if "statistics" in data and "commentCount" in data["statistics"]:
-				_val = data["statistics"]["commentCount"]
 		return _val
 
 	def _get_share_count(method=None,data=None):
@@ -1138,21 +1106,4 @@ class Spread:
 		_val = 0
 		if method=="crowdtangle":
 			_val = data["statistics"]["actual"]["careCount"]
-		return _val
-
-
-#YOUTUBE SPECIFIC
-
-	def _get_hidden_sub_count(method=None,data=None):
-		_val = None
-		if method=="youtube":
-			if "statistics" in data["actor"] and "hiddenSubscriberCount" in data["actor"]["statistics"]:
-				_val = data["actor"]["statistics"]["hiddenSubscriberCount"]
-		return _val
-
-	def _get_view_count(method=None,data=None):
-		_val = None
-		if method=="youtube":
-			if "statistics" in data and "viewCount" in data["statistics"]:
-				_val = data["statistics"]["viewCount"]
 		return _val

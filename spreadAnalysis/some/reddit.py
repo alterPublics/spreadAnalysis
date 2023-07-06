@@ -41,7 +41,7 @@ class Reddit:
 							"before":int(hlp.to_default_date_format(end_date).replace().timestamp()),
 							"after":int(hlp.to_default_date_format(start_date).replace().timestamp()),
 							"size":500}
-				data = self._get_data(data,call_url,params,wait_time=0.19)
+				data = self._get_data(data,call_url,params,wait_time=2.19)
 
 		return data
 

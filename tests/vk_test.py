@@ -4,13 +4,13 @@ from spreadAnalysis.io.config_io import Config
 actor = "anonymousnews_org"
 conf = Config()
 vk = Vkontakte(conf.get_auth()["vkontakte"])
-data = vk.actor_content("352484777",start_date="2022-03-01")
+"""data = vk.actor_content(actor,start_date="2023-03-01")
 print (data)
 print (len(data["output"]))
-sys.exit()
+sys.exit()"""
 
-query = 'støjberg'
-data = vk.query_content(query,start_date="2021-12-01")
+query = 'independentnorth.net'
+data = vk.url_referals(query,start_date="2019-12-01")
 print (data)
 print (len(data["output"]))
 sys.exit()

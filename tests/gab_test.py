@@ -8,8 +8,8 @@ url = "https://konfront.dk/et-hvidt-tryghedshold-kalder-den-hvide-del-af-venstre
 url = "https://rt.com"
 actor = "https://gab.com/MorKarins"
 actor = "NaturalNews"
-actor = "RT"
-data = gab.actor_content(actor,start_date="2022-06-10")
+#actor = "RT"
+data = gab.actor_content(actor,start_date="2019-08-10")
 #data = rdit.domain_referals(url,start_date="2017-06-01")
 #print (len(data))
 print (data)

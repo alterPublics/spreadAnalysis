@@ -15,6 +15,7 @@ from spreadAnalysis.persistence.schemas import Spread
 import spreadAnalysis.utils.helpers as hlp
 from spreadAnalysis.scraper.scraper import Scraper
 from datetime import datetime, timedelta
+import random
 import sys
 from newspaper import Article
 import time
@@ -321,8 +322,9 @@ class CollectMongo:
         platform_to_source = {d["platform_dest"]:d["platform_source"] for d in self.platform_info}
         if "Instagram" in platform_to_source: platform_to_source["Instagram"]="crowdtangle_insta"
 
-        for actor_doc in list(org_actors):
-            actor = actor_doc["Actor"]
+        org_actors = list(org_actors)
+        random.shuffle(org_actors)
+        for actor in org_actors:
             if actor in aliases:
                 for alias in aliases[actor]:
                     if alias["platform"] in platform_to_source:
@@ -422,6 +424,47 @@ class CollectMongo:
                         break
                     l_start_date = l_end_date
 
+    def query_collect(self,org_queries,input_sd,input_ed,recollect=False):
+
+        if self.low_memory:
+            prev_post_ids = None
+            prev_url_q_post_ids = None
+        else:
+            prev_post_ids = self.mdb.get_keys_from_db(self.mdb.database["post"],use_col="message_id")
+            prev_url_q_post_ids = self.mdb.get_key_pairs_from_db(self.mdb.database["query_post"],"input","message_id")
+
+        for org_q in org_queries:
+            org_q = org_q["Query"]
+            resolve_inputs = [org_q]
+            for method_name, method in self.get_methods("query").items():
+                start_date, end_date = input_sd, input_ed
+                start_date, end_date = self.resolve_dates_from_pulls(resolve_inputs,method_name,start_date,end_date,recollect=recollect)
+                if start_date is None:
+                    continue
+                l_start_date, l_end_date = start_date, start_date
+                current_interval = self.MIN_DATE_RANGE_INTERVAL
+                while hlp.to_default_date_format(l_end_date) < hlp.to_default_date_format(end_date):
+                    l_end_date = hlp.get_next_end_date(l_start_date,end_date,interval=current_interval,max_interval=self.MAX_DATE_RANGE_INTERVAL,check_start_date=l_start_date)
+                    #if True:
+                    try:
+                        data = list(method.query_content(org_q,start_date=l_start_date,end_date=l_end_date)["output"])
+                    except:
+                        data = None
+                        time.sleep(self.fail_wait_time)
+                    self.process_pull(org_q,method_name,"query",data,l_start_date,l_end_date)
+                    if data is not None:
+                        prev_post_ids = self.save_data(self.mdb.database["post"],
+                            data,method_name,prev_post_ids,Spread._get_message_id,update_key_col="message_id")
+                        prev_url_q_post_ids = self.save_data(self.mdb.database["query_post"],
+                            [{"input":org_q,"message_id":Spread._get_message_id(method=method_name,data=doc)} for doc in data],
+                            method_name,prev_url_q_post_ids,("input","message_id"),update_key_col=("input","message_id"))
+                        current_interval = self.get_interval_from_returned_data(current_interval,data)
+                        print ("({0} : {1})".format(str(l_start_date),str(l_end_date)) + " - " + str(org_q) + " - " + str(method_name) + " - " + str(len(data)))
+                    else:
+                        print ("({0} : {1})".format(str(l_start_date),str(l_end_date)) + " - " + str(org_q) + " - " + str(method_name) + " - " + str("ERROR in Data Retrieval"))
+                        break
+                    l_start_date = l_end_date
+
     def collect(self,endpoint,title=None,platform_list=None,start_date=None \
                 ,end_date=None,skip_existing=True,iterations=[],actor_web=True,with_unpack=True,
                 custom_org_inputs=[],recollect=False):
@@ -443,7 +486,12 @@ class CollectMongo:
 
         if endpoint == "url":
             self.url_collect(org_inputs,start_date,end_date,with_unpack=with_unpack)
+        if endpoint == "query":
+            self.query_collect(org_inputs,start_date,end_date,recollect=recollect)
         if endpoint == "actor":
+            org_inputs = [actor_doc["Actor"] for actor_doc in org_inputs]
+            if len(custom_org_inputs) > 0:
+                org_inputs = [i for i in org_inputs if i in custom_org_inputs]
             self.actor_collect(org_inputs,start_date,end_date)
         if endpoint == "domain":
             org_inputs = set([d["Url"] for d in list(org_inputs) if str(d["Domain"]) == "1" or str(d["Domain"]) == "1.0"])
@@ -456,5 +504,8 @@ class CollectMongo:
                         self.mdb.get_data_from_db(self.mdb.database["actor"])]))
             #org_inputs = ["https://www.rt.com/"]
             if len(custom_org_inputs) > 0:
+                print (org_inputs)
                 org_inputs = [i for i in org_inputs if i in custom_org_inputs]
+                print (org_inputs)
+
             self.domain_collect(org_inputs,start_date,end_date,recollect=recollect)

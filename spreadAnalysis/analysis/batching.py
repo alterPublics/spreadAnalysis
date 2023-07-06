@@ -207,7 +207,7 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
 				max_upd_date = max_upd_date[0]["inserted_at"]
 		else:
 			max_upd_date = max_upd_date[0]["updated_at"]
-		max_upd_date = max_upd_date-timedelta(days=5)
+		max_upd_date = max_upd_date-timedelta(days=2)
 		if skip_existing: max_upd_date = datetime(2000,1,1)
 		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
 		random.shuffle(actor_obj_ids)
@@ -887,7 +887,7 @@ def get_articles(url):
 
 	return doc
 
-def update_url_texts(num_cores=12):
+def update_url_texts(num_cores=2):
 
 	from newspaper import Config as NConfig
 	user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'
@@ -911,6 +911,10 @@ def update_url_texts(num_cores=12):
 		for url in url_p:
 			if url not in prev_urls:
 				temp_urls.append(url)
+				if num_cores < 2:
+					results = [get_articles(temp_urls[0])]
+					mdb.insert_many(mdb.database["url_texts"],list(results))
+					temp_urls = []
 				if len(temp_urls) == num_cores:
 					pool = Pool(num_cores)
 					results = pool.map(get_articles,temp_urls)
@@ -921,5 +925,5 @@ def update_url_texts(num_cores=12):
 if __name__ == "__main__":
 	#update_actor_message()
 	#update_agg_actor_metrics(skip_existing=True)
-	update_url_texts()
+	update_url_texts(num_cores=1)
 	sys.exit()

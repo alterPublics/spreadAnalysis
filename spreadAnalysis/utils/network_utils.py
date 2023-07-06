@@ -7,6 +7,117 @@ from multiprocessing import Pool, Manager
 import random
 import pandas as pd
 from spreadAnalysis.utils import helpers as hlp
+from scipy import integrate
+
+def disparity_filter_alpha_cut_multi(G,weight='weight',alpha_t=0.4, cut_mode='or'):
+
+	B = nx.MultiGraph()#Undirected case:
+	for u, v in list(G.edges()):
+		for k in list(G[u][v].keys()):
+			try:
+				alpha = G[u][v][k]['alpha']
+			except KeyError: #there is no alpha, so we assign 1. It will never pass the cut
+				alpha = 1
+			if alpha<alpha_t:
+				B.add_edge(u,v,key=k, weight=G[u][v][k]['weight'])
+	return B
+
+def disparity_filter_multi(G,keys=[], weight='weight'):
+
+	B = nx.MultiGraph()
+	for u in G:
+		k = len(G[u])
+		if k > 1:
+			for ke in keys:
+				sum_w = sum(np.absolute(G[u][v][ke][weight]) for v in G[u] if ke in G[u][v])
+				for v in G[u]:
+					if ke in G[u][v]:
+						w = G[u][v][ke][weight]
+						p_ij = float(np.absolute(w))/sum_w
+						alpha_ij = 1 - (k-1) * integrate.quad(lambda x: (1-x)**(k-2), 0, p_ij)[0]
+						B.add_edge(u, v, key=ke, weight = w, alpha=float('%.4f' % alpha_ij))
+	return B
+
+def disparity_filter_alpha_cut(G,weight='weight',alpha_t=0.4, cut_mode='or'):
+
+	if nx.is_directed(G):#Directed case:
+		B = nx.DiGraph()
+		for u, v, w in G.edges(data=True):
+			try:
+				alpha_in =  w['alpha_in']
+			except KeyError: #there is no alpha_in, so we assign 1. It will never pass the cut
+				alpha_in = 1
+			try:
+				alpha_out =  w['alpha_out']
+			except KeyError: #there is no alpha_out, so we assign 1. It will never pass the cut
+				alpha_out = 1
+
+			if cut_mode == 'or':
+				if alpha_in<alpha_t or alpha_out<alpha_t:
+					B.add_edge(u,v, weight=w[weight])
+			elif cut_mode == 'and':
+				if alpha_in<alpha_t and alpha_out<alpha_t:
+					B.add_edge(u,v, weight=w[weight])
+		return B
+
+	else:
+		B = nx.Graph()#Undirected case:
+		for u, v, w in G.edges(data=True):
+
+			try:
+				alpha = w['alpha']
+			except KeyError: #there is no alpha, so we assign 1. It will never pass the cut
+				alpha = 1
+
+			if alpha<alpha_t:
+				B.add_edge(u,v, weight=w[weight])
+		return B
+
+def disparity_filter(G, weight='weight'):
+
+	if nx.is_directed(G): #directed case
+		N = nx.DiGraph()
+		for u in G:
+
+			k_out = G.out_degree(u)
+			k_in = G.in_degree(u)
+
+			if k_out > 1:
+				sum_w_out = sum(np.absolute(G[u][v][weight]) for v in G.successors(u))
+				for v in G.successors(u):
+					w = G[u][v][weight]
+					p_ij_out = float(np.absolute(w))/sum_w_out
+					alpha_ij_out = 1 - (k_out-1) * integrate.quad(lambda x: (1-x)**(k_out-2), 0, p_ij_out)[0]
+					N.add_edge(u, v, weight = w, alpha_out=float('%.4f' % alpha_ij_out))
+
+			elif k_out == 1 and G.in_degree(G.successors(u)[0]) == 1:
+				#we need to keep the connection as it is the only way to maintain the connectivity of the network
+				v = G.successors(u)[0]
+				w = G[u][v][weight]
+				N.add_edge(u, v, weight = w, alpha_out=0., alpha_in=0.)
+				#there is no need to do the same for the k_in, since the link is built already from the tail
+
+			if k_in > 1:
+				sum_w_in = sum(np.absolute(G[v][u][weight]) for v in G.predecessors(u))
+				for v in G.predecessors(u):
+					w = G[v][u][weight]
+					p_ij_in = float(np.absolute(w))/sum_w_in
+					alpha_ij_in = 1 - (k_in-1) * integrate.quad(lambda x: (1-x)**(k_in-2), 0, p_ij_in)[0]
+					N.add_edge(v, u, weight = w, alpha_in=float('%.4f' % alpha_ij_in))
+		return N
+
+	else: #undirected case
+		B = nx.Graph()
+		for u in G:
+			k = len(G[u])
+			if k > 1:
+				sum_w = sum(np.absolute(G[u][v][weight]) for v in G[u])
+				for v in G[u]:
+					w = G[u][v][weight]
+					p_ij = float(np.absolute(w))/sum_w
+					alpha_ij = 1 - (k-1) * integrate.quad(lambda x: (1-x)**(k-2), 0, p_ij)[0]
+					B.add_edge(u, v, weight = w, alpha=float('%.4f' % alpha_ij))
+		return B
 
 def add_score_based_label(g,att_name,att_vals):
 
@@ -62,9 +173,9 @@ def set_neighbour_affinity(args):
 		for org,edg,w in edges:
 			main_node = org
 			avg_dists.append(node_atts_gl[edg]["dist_to_0g{0}".format(grey_number)])
-			dist_weights.append(w["nij"])
+			dist_weights.append(w["weight"])
 			for att in unique_atts:
-				new_atts[att]+=np.log(w["nij"]+2)*node_atts_gl[edg][att]*(node_atts_gl[edg]["dist_to_0g{0}".format(grey_number)]+1)**-1
+				new_atts[att]+=np.log(w["weight"]+2)*node_atts_gl[edg][att]*(node_atts_gl[edg]["dist_to_0g{0}".format(grey_number)]+1)**-1
 		atts_sum = float(np.sum(np.array(list(new_atts.values()))))
 		if atts_sum > 0:
 			new_atts = {a:float(v)/atts_sum for a,v in list(new_atts.items())}
@@ -92,7 +203,7 @@ def set_neighbour_affinity_score(args):
 		new_node_atts[n]=new_atts
 	return new_node_atts
 
-def add_affinity_scores(g,actor_mapping,num_cores=12,grey_number=0,batch_size=2,noise=True):
+def add_affinity_scores(g,actor_mapping,num_cores=12,grey_number=0,batch_size=2,noise=True,exclude_from_grey=None):
 
 	manager = Manager()
 	global node_atts_gl
@@ -100,6 +211,8 @@ def add_affinity_scores(g,actor_mapping,num_cores=12,grey_number=0,batch_size=2,
 	actor_mapping = {k:v for k,v in actor_mapping.items() if k in g}
 	n_actors = len(actor_mapping)
 	not_mapped_actors = [a for a in g.nodes() if a not in actor_mapping]
+	if exclude_from_grey is not None:
+		not_mapped_actors = [a for a,d in g.nodes(data=True) if a not in actor_mapping and d[exclude_from_grey[0]]!=exclude_from_grey[1]]
 	if noise:
 		if len(not_mapped_actors) > 2*n_actors:
 			grey_actors = {a:"grey{}".format(grey_number) for a in random.sample(not_mapped_actors,n_actors)}
@@ -165,7 +278,7 @@ class NetworkUtils:
 		com_nodes = {}
 		int_node_mapping = dict(zip(g.nodes(),range(0,len(g.nodes()))))
 		g = nx.relabel_nodes(g,int_node_mapping)
-		partition = community.best_partition(g.to_undirected())
+		partition = community.best_partition(g.to_undirected(),resolution=0.5)
 		print("Number of communities: " + str(len(set(partition.values()))))
 		for node, com in partition.items():
 			if not com in com_nodes: com_nodes[com]=[]

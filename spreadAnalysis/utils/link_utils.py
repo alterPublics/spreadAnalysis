@@ -213,6 +213,34 @@ class LinkUtils:
 
 		return domain
 
+	def extract_str_domain(self,url):
+
+		final_dom = None
+		if "." in str(url):
+			if "http" in url or "www." in url:
+				final_dom = urlparse(url).netloc
+				if self.remove_url_prefix(final_dom) is not None: final_dom = self.remove_url_prefix(final_dom)
+				final_dom = final_dom.replace("www.","")
+			else:
+				dom_parts = url.split(".")
+				if len(dom_parts) > 1:
+					dom_1_part = dom_parts[0]
+					dom_2_part = dom_parts[1]
+					if len(dom_parts) > 2:
+						dom_3_part = dom_parts[2]
+					else:
+						dom_3_part = None
+					if len(dom_2_part) <= 3 and len(dom_2_part) >= 2 and not dom_1_part[-1].isspace() and dom_1_part[-1].islower() and not dom_2_part[0].isspace() and dom_2_part[0].islower():
+						final_dom = dom_1_part+"."+dom_2_part
+						if dom_3_part is not None:
+							final_dom+="."
+							final_dom+=dom_3_part
+
+						final_dom = final_dom.strip()
+						if len(final_dom) < 1: final_dom = None
+		return final_dom
+
+
 	def extract_special_url(self,full_url):
 
 		if full_url is None: return None

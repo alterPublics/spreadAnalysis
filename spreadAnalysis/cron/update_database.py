@@ -25,4 +25,5 @@ if __name__ == "__main__":
 	print("--- %s seconds --- to update actor metrics" % (time.time() - start_time))
 	print("--- %s seconds --- to run entire update" % (time.time() - all_time))
 	btc.update_agg_actor_metrics(skip_existing=False,num_cores=8,full=True)
+	btc.update_cleaned_urls()
 	print (datetime.today())

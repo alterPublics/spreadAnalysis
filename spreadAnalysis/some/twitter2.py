@@ -134,7 +134,7 @@ class Twitter2:
 				actor_data.update({e["username"]:e for e in res.json()["data"]})
 		return actor_data
 
-	def url_referals(self,url,start_date=None,end_date=None,wait_time=3.1,max_results=500000,extra_params=None):
+	def url_referals(self,url,start_date=None,end_date=None,wait_time=3.1,max_results=500000,extra_params=None,no_collect_overlap=False):
 
 		data = {"input":url,
 				"input_type":"link",
@@ -143,13 +143,15 @@ class Twitter2:
 		start_date, end_date = hlp.get_default_dates(start_date,end_date)
 		if end_date is None or str(end_date)[:10] == str(datetime.now())[:10]: end_time = str((datetime.now()-timedelta(seconds=60)).time())[:8]
 		else: end_time = "23:59:59"
+		if no_collect_overlap: start_time = "23:59:59"
+		else: start_time = "00:01:00"
 		call_url = self.base_url+'/tweets/search/all'
 		search_urls = [url]
 		if "youtube." in url and "watch?v=" in url:
 			search_urls.append("https://youtu.be/"+url.split("watch?v=")[-1].split("&")[0])
 		for search_url in search_urls:
 			params = {'query':'url:"{0}"'.format(search_url),
-						'start_time':str(start_date)[:10]+'T00:01:00Z',
+						'start_time':str(start_date)[:10]+'T{0}Z'.format(start_time),
 						'end_time':str(end_date)[:10]+'T{0}Z'.format(end_time),
 						'max_results':100}
 			params.update(self._get_exp_params())
@@ -160,7 +162,7 @@ class Twitter2:
 
 		return data
 
-	def actor_content(self,actor,start_date=None,end_date=None,max_results=80000):
+	def actor_content(self,actor,start_date=None,end_date=None,max_results=95000,only_with_links=True):
 
 		actor = LinkCleaner().extract_username(actor,never_none=True)
 		start_date, end_date = hlp.get_default_dates(start_date,end_date)
@@ -175,9 +177,11 @@ class Twitter2:
 					'start_time':start_date+'T00:01:00Z',
 					'end_time':end_date+'T23:59:59Z',
 					'max_results':100}
+		if only_with_links:
+			params["query"]+=" has:links"
 		params.update(self._get_exp_params())
 		headers = self._get_headers()
-		data_to_return = self._get_data(data,call_url,params,headers,wait_time=3.1,max_results=max_results)
+		data_to_return = self._get_data(data,call_url,params,headers,wait_time=2.3,max_results=max_results)
 
 		return data_to_return
 
@@ -189,7 +193,7 @@ class Twitter2:
 		seen_tweet_ids = set([])
 		for start_date,end_date in hlp.create_date_ranges(start_date,end_date,interval=400):
 			#extra_params = {'query':'"{0}" (lang:da OR lang:no OR lang:sv OR lang:fi OR lang:de OR lang:nl)'.format(domain)}
-			call_domain = domain
+			call_domain = LinkCleaner().strip_backslash(domain)
 			extra_params = {'query':'url:"{0}"'.format(call_domain)}
 			dom_data = self.url_referals(call_domain,start_date=start_date,end_date=end_date,extra_params=extra_params)
 			#print (" - ".join([domain,str(start_date),str(end_date),str(len(dom_data["output"]))]))
@@ -232,7 +236,7 @@ class Twitter2:
 		seen_tweet_ids = set([])
 		for start_date,end_date in hlp.create_date_ranges(start_date,end_date,interval=400):
 			extra_params = {'query':'{0}'.format(query)}
-			dom_data = self.url_referals(query,start_date=start_date,end_date=end_date,extra_params=extra_params)
+			dom_data = self.url_referals(query,start_date=start_date,end_date=end_date,extra_params=extra_params,wait_time=1.02,no_collect_overlap=True,max_results=50000003)
 			for doc in dom_data["output"]:
 				if doc["id"] not in seen_tweet_ids:
 					new_data["output"].append(doc)
