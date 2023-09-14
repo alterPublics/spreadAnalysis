@@ -21,6 +21,7 @@ class Config:
     def set_env(self):
 
         self.MAIN_PATH = environ.get('MAIN_PATH')
+        self.PROJECT_PATH = environ.get('PROJECT_PATH')
         self.TELEGRAM_BINARY = environ.get("TELEGRAM_BINARY")
         self.LANGDETECT_MODEL = environ.get("LANGDETECT_MODEL")
         self.CHROMEDRIVER = environ.get("CHROMEDRIVER")

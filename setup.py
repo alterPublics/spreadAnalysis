@@ -58,7 +58,7 @@ def setup_package(pkg_name):
             'gensim',
             'seaborn',
             'matplotlib',
-            'pymongo==3.9',
+            'pymongo',
             'hdbscan',
             'garc',
             'newspaper3k',

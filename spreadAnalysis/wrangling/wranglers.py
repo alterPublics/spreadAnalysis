@@ -4,7 +4,9 @@ from spreadAnalysis.io.config_io import Config
 from spreadAnalysis.scraper.scraper import Scraper
 from spreadAnalysis.utils.pd_utils import *
 from spreadAnalysis.persistence.schemas import Spread
+from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne, UpdateMany
 from spreadAnalysis.persistence.mongo import MongoSpread
+from spreadAnalysis.persistence.mongo import _multi_unpack_url
 from spreadAnalysis import _gvars as gvar
 import spreadAnalysis.utils.helpers as hlp
 import csv
@@ -13,6 +15,103 @@ import random
 import numpy as np
 import sys
 from datetime import datetime
+from queue import Queue
+from threading import Thread
+import requests
+
+def _threaded_unpack():
+
+    global q
+    global cleaned_urls
+    global mdb
+    while True:
+        old_url = q.get()
+        try:
+            a = requests.get(old_url,timeout=4,allow_redirects=True)
+            a = a.url
+        except Exception as e:
+            if "host='" in str(e) and "exceeded with url: " in str(e):
+                a = str(e).split("host='")[-1].split("'")[0]+str(e).split("exceeded with url: ")[-1].split(" ")[0]
+            else:
+                a = None
+                print (e)
+        if a is not None and str(a)[:4] != "http":
+            a = "https://"+a
+        unpacked = a
+        if unpacked is not None:
+            if unpacked is not None and not isinstance(unpacked,list):
+                uurl = unpacked
+                if "http" in uurl and uurl is not None and uurl != old_url:
+                    uurl = LinkCleaner().single_clean_url(uurl)
+                    uurl = LinkCleaner().sanitize_url_prefix(uurl)
+                    if not LinkCleaner().is_url_domain(uurl):
+                        print (str(old_url)+"\t"+str(uurl))
+                        cleaned_urls[old_url]=uurl
+                        mdb.insert_one(mdb.database["clean_url"],{"url":old_url,"clean_url":uurl})
+        q.task_done()
+        
+
+def unpack_short_urls(main_path="/work/JakobBækKristensen#1091/alterpublics/projects/full_test"):
+
+    NUM_THREADS = 4
+    global q
+    global cleaned_urls
+    global mdb
+
+    mdb = MongoSpread()
+    url_shorts = list(set(list(pd.read_csv(main_path+"/"+"url_shorteners.csv")["domain"])))
+    #url_shorts = ["bit.ly","ow.ly","t.co","dlvr.it","tinyurl.com","goo.gl"]
+    cleaned_urls = {}
+    cleaned_urls = {d["url"]:d["clean_url"] for d in mdb.database["clean_url"].find({})}
+    #cleaned_urls.update({d["url"]:d["clean_url"] for d in mdb.database["clean_url"].find({}) if d["url"] is not None and d["clean_url"] is not None and d["url"]!=d["clean_url"] and d["url"]!=d["clean_url"][:-1]})
+    #draw = list([doc for doc in mdb.database["url_bi_network"].find({"domain":"bit.ly"})])
+    #random.shuffle(draw)
+    seen_urls = set([])
+    for r in range(1000):
+        q = Queue()
+        doc_count = 0
+        for url_short in url_shorts:
+            for doc in mdb.database["url_bi_network"].find({"domain":str(url_short)}):
+                surl = "https://"+doc["url"]
+                if surl not in cleaned_urls and surl not in seen_urls:
+                    q.put(surl)
+                    doc_count+=1
+                if doc_count >= 20000:
+                    break
+                seen_urls.add(surl)
+            if doc_count >= 20000:
+                    break
+        for t in range(NUM_THREADS):
+
+            worker = Thread(target=_threaded_unpack)
+            worker.daemon = True
+            worker.start()
+        q.join()
+        print (q.qsize())
+    #print (seen_urls)
+
+def update_urls_with_counts():
+
+    mdb = MongoSpread()
+    bulks = []
+    #query = [{"$limit":1200000},{"$match":{"occurences":{"$exists":False}}},{ "$group": { "_id": "$url", "count": { "$sum": 1 } } }]
+    try:
+        mdb.database["url_bi_network"].drop_index('occurences_-1')
+    except:
+        pass
+    query = [{ "$group": { "_id": "$url", "count": { "$sum": 1 } } }]
+    count = 0
+    for doc in mdb.database["url_bi_network"].aggregate(query):
+        count+=1
+        bulks.append(UpdateMany({"url":doc["_id"] },
+									{'$set': {"occurences":doc["count"]}}))
+        if count % 1000000 == 0:
+            print (count)
+            mdb.database["url_bi_network"].bulk_write(bulks)
+            bulks = []
+    if len(bulks) > 0:
+        mdb.database["url_bi_network"].bulk_write(bulks)
+    mdb.database["url_bi_network"].create_index([ ("occurences", -1) ])
 
 def insert_fourchan_data(path_to_file,start_date="2019-01-01"):
 

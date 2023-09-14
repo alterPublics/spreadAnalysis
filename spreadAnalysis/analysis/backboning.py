@@ -162,8 +162,8 @@ def noise_corrected(table, undirected = False, return_self_loops = False, calcul
 		table["n.."] = table["nij"].sum()
 		table["mean_prior_probability"] = ((table["ni."] * table["n.j"]) / table["n.."]) * (1 / table["n.."])
 		if calculate_p_value:
-			 table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
-			 return table[["src", "trg", "nij", "score"]]
+			table["score"] = binom.cdf(table["nij"], table["n.."], table["mean_prior_probability"])
+			return table[["src", "trg", "nij", "score"]]
 		print ("Getting Kappa...")
 		table["kappa"] = table["n.."] / (table["ni."] * table["n.j"])
 		print ("Getting score...")

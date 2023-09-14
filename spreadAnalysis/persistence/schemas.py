@@ -109,6 +109,49 @@ class Spread:
 			else:
 				_val = ""
 		return _val
+	
+	@staticmethod
+	def _get_post_message(method=None,data=None):
+		_val = None
+		if method=="crowdtangle":
+			text_fields = [str(data[field]) for field in ["message"] if field in data]
+			_val = str(" ".join(text_fields))
+		if method=="twitter2":
+			_val = str(data["text"])
+		if method=="crowdtangle_app":
+			_val = str(data["message"])
+		if method=="google":
+			_val = " ".join([str(data["snippet"])])
+		if method=="vkontakte":
+			_val = str(data["text"])
+		if method=="reddit":
+			if "selftext" in data:
+				_val = str(data["selftext"])
+			elif "body" in data:
+				_val = str(data["body"])
+			else:
+				_val = ""
+		if method=="majestic":
+			_val = str(data["SourceTitle"])
+		if method=="youtube":
+			text_fields = [str(data["snippet"][field]) for field in ["description"] if field in data["snippet"]]
+			_val = " ".join(text_fields)
+		if method=="telegram":
+			if "message" in data:
+				_val = str(dict(data)["message"])
+			else:
+				_val = ""
+		if method=="tiktok":
+			_val = str(data["desc"])
+		if method=="gab":
+			_val = str(data["body"])
+		if method=="fourchan":
+			#print (data)
+			if "comment" in data:
+				_val = str(data["comment"])
+			else:
+				_val = ""
+		return _val
 
 	@staticmethod
 	def _get_message_link(method=None,data=None):
@@ -127,6 +170,10 @@ class Spread:
 						_val = url_dat["expanded_url"]
 						break
 					_val = url_dat["expanded_url"]
+				if _val is None and "attachments" in data and "media_keys" in data["attachments"]:
+					for url_dat in data["entities"]["urls"]:
+						_val = url_dat["expanded_url"]
+						break
 		if method=="crowdtangle_app":
 			_val = str(data["link"])
 		if method=="google":
@@ -163,12 +210,18 @@ class Spread:
 	def _get_all_external_message_links(method=None,data=None):
 
 		all_text = Spread._get_message_text(method=method,data=data)
-		url_list = LinkCleaner().get_url_list_from_text(all_text)
+		if "method" == "twitter2":
+			url_list = []
+			if "entities" in data and "urls" in data["entities"]:
+				for url_dat in data["entities"]["urls"]:
+					url_list.append(url_dat["expanded_url"])
+		else:
+			url_list = LinkCleaner().get_url_list_from_text(all_text)
 		pl = Spread._get_platform(method=method,data=data)
 		all_urls = []
 		for url in url_list:
 			pl_found = False
-			if pl in PLATFORM_TO_STR_ID:
+			if pl in PLATFORM_TO_STR_ID and pl != "facebook":
 				for pstr in PLATFORM_TO_STR_ID[pl]:
 					if pstr in str(url):
 						pl_found = True
@@ -183,7 +236,7 @@ class Spread:
 		try:
 			_val = LinkCleaner().extract_special_url(Spread._get_message_link(data=data,method=method))
 		except:
-			LinkCleaner().extract_domain(Spread._get_message_link(data=data,method=method))
+			LinkCleaner().extract_str_domain(Spread._get_message_link(data=data,method=method))
 		return _val
 
 	@staticmethod
@@ -334,7 +387,7 @@ class Spread:
 			if "first_name" in data["actor"]:
 				_val = data["actor"]["first_name"]+" "+data["actor"]["last_name"]
 			elif "name" in data["actor"]:
-				 _val = data["actor"]["name"]
+				_val = data["actor"]["name"]
 			else:
 				_val = Spread()._get_actor_username(method=method,data=data)
 		if method=="reddit":
@@ -615,7 +668,8 @@ class Spread:
 			if "SourceTopicalTrustFlow_Topic_0" in data:
 				_val = str(data["SourceTopicalTrustFlow_Topic_0"])
 		if method=="youtube":
-			_val = str(data["actor"]["kind"])
+			if "actor" in data and "kind" in data["actor"]:
+				_val = str(data["actor"]["kind"])
 		if method=="telegram":
 			_val = "telegram"
 		if method=="tiktok":
@@ -634,10 +688,12 @@ class Spread:
 		if method=="crowdtangle":
 			_val = int(sum(list(data["statistics"]["actual"].values())))
 		if method=="twitter2":
+			_val = Spread()._get_retweet_count(method=method,data=data)+Spread()._get_reply_count(method=method,data=data)+Spread()._get_favorite_count(method=method,data=data)
+			"""
 			if "referenced_tweets" in data and data["referenced_tweets"][0]["type"]=="retweeted":
 				_val = int(data["public_metrics"]["like_count"]+data["public_metrics"]["reply_count"])
 			else:
-				_val = sum(list(data["public_metrics"].values()))
+				_val = sum(list(data["public_metrics"].values()))"""
 		if method=="crowdtangle_app":
 			_val = 0
 			fields = ["shares","comments","likes","retweets","love_count",
@@ -653,7 +709,10 @@ class Spread:
 				if it in data:
 					_val+=int(data[it]["count"])
 		if method=="reddit":
-			_val = int(data["score"])
+			if "num_comments" in data:
+				_val+= int(data["num_comments"])
+			if "num_crossposts" in data:
+				_val+= int(data["num_crossposts"])
 		if method=="majestic":
 			_val = int(data["SourceCitationFlow"])
 		if method=="youtube":
@@ -663,15 +722,189 @@ class Spread:
 				if field in data["statistics"]:
 					_val+=int(data["statistics"][field])
 		if method=="telegram":
-			if "views" and "forwards" in data and data["views"] is not None and data["forwards"] is not None:
-				_val = int(data["views"])+int(data["forwards"])
-			else:
-				_val = 0
+			if "forwards" in data and data["forwards"] is not None:
+				_val += int(data["forwards"])
+			if "replies" in data and data["replies"] is not None:
+				_val += int(data["replies"]["replies"])
+			if "views" in data and data["views"] is not None:
+				_val += int(data["views"])
 		if method=="tiktok":
 			_val = int(data["stats"]["diggCount"])+int(data["stats"]["shareCount"])+int(data["stats"]["commentCount"])+int(data["stats"]["playCount"])
 		if method=="gab":
 			_val = 0
 			fields = ["replies_count","reblogs_count","favourites_count"]
+			for field in fields:
+				if field in data:
+					_val+=int(data[field])
+		if method=="fourchan":
+			if "op" in data:
+				_val = int(data["op"])
+
+		return _val
+
+	@staticmethod
+	def _get_engagement(method=None,data=None):
+
+		_val = 0
+		if method=="crowdtangle":
+			_val = int(sum([v for k,v in data["statistics"]["actual"].items() if k != "viewCount"]))
+		if method=="twitter2":
+			_val = Spread()._get_retweet_count(method=method,data=data)+Spread()._get_reply_count(method=method,data=data)+Spread()._get_favorite_count(method=method,data=data)
+		if method=="google":
+			_val = 0
+		if method=="vkontakte":
+			_val = 0
+			for it in ["comments","likes","reposts"]:
+				if it in data:
+					_val+=int(data[it]["count"])
+		if method=="reddit":
+			if "num_comments" in data:
+				_val+= int(data["num_comments"])
+			if "num_crossposts" in data:
+				_val+= int(data["num_crossposts"])
+		if method=="majestic":
+			_val = 0
+		if method=="youtube":
+			_val = 0
+			fields = ["favoriteCount","commentCount","likeCount"]
+			for field in fields:
+				if field in data["statistics"]:
+					_val+=int(data["statistics"][field])
+		if method=="telegram":
+			if "forwards" in data and data["forwards"] is not None:
+				_val += int(data["forwards"])
+			if "replies" in data and data["replies"] is not None:
+				_val += int(data["replies"]["replies"])
+		if method=="tiktok":
+			_val = int(data["stats"]["diggCount"])+int(data["stats"]["shareCount"])+int(data["stats"]["commentCount"])
+		if method=="gab":
+			_val = 0
+			fields = ["replies_count","reblogs_count","favourites_count"]
+			for field in fields:
+				if field in data:
+					_val+=int(data[field])
+		if method=="fourchan":
+			if "op" in data:
+				_val = int(data["op"])
+
+		return _val
+
+	@staticmethod
+	def _get_reactions(method=None,data=None):
+
+		_val = 0
+		if method=="crowdtangle":
+			_val = int(sum([v for k,v in data["statistics"]["actual"].items() if k != "viewCount" and  k != "commentCount" and  k != "shareCount"]))
+		if method=="twitter2":
+			_val = Spread()._get_favorite_count(method=method,data=data)
+		if method=="google":
+			_val = 0
+		if method=="vkontakte":
+			_val = 0
+			for it in ["likes"]:
+				if it in data:
+					_val+=int(data[it]["count"])
+		if method=="reddit":
+			if "score" in data:
+				_val+= int(data["score"])
+		if method=="majestic":
+			_val = 0
+		if method=="youtube":
+			_val = 0
+			fields = ["favoriteCount","likeCount"]
+			for field in fields:
+				if field in data["statistics"]:
+					_val+=int(data["statistics"][field])
+		if method=="telegram":
+			_val = 0
+		if method=="tiktok":
+			_val = 0
+		if method=="gab":
+			_val = 0
+			fields = ["favourites_count"]
+			for field in fields:
+				if field in data:
+					_val+=int(data[field])
+		if method=="fourchan":
+			if "op" in data:
+				_val = int(data["op"])
+
+		return _val
+	
+	@staticmethod
+	def _get_comments(method=None,data=None):
+
+		_val = 0
+		if method=="crowdtangle":
+			_val = int(data["statistics"]["actual"]["commentCount"])
+		if method=="twitter2":
+			_val = Spread()._get_reply_count(method=method,data=data)
+		if method=="google":
+			_val = 0
+		if method=="vkontakte":
+			_val = 0
+			for it in ["comments"]:
+				if it in data:
+					_val+=int(data[it]["count"])
+		if method=="reddit":
+			if "num_comments" in data:
+				_val+= int(data["num_comments"])
+		if method=="majestic":
+			_val = 0
+		if method=="youtube":
+			_val = 0
+			fields = ["commentCount",]
+			for field in fields:
+				if field in data["statistics"]:
+					_val+=int(data["statistics"][field])
+		if method=="telegram":
+			if "replies" in data and data["replies"] is not None:
+				_val += int(data["replies"]["replies"])
+		if method=="tiktok":
+			_val = 0
+		if method=="gab":
+			_val = 0
+			fields = ["replies_count"]
+			for field in fields:
+				if field in data:
+					_val+=int(data[field])
+		if method=="fourchan":
+			if "op" in data:
+				_val = int(data["op"])
+
+		return _val
+
+	@staticmethod
+	def _get_shares(method=None,data=None):
+
+		_val = 0
+		if method=="crowdtangle":
+			if "shareCount" in data["statistics"]["actual"]:
+				_val = int(data["statistics"]["actual"]["shareCount"])
+		if method=="twitter2":
+			_val = Spread()._get_retweet_count(method=method,data=data)
+		if method=="google":
+			_val = 0
+		if method=="vkontakte":
+			_val = 0
+			for it in ["reposts"]:
+				if it in data:
+					_val+=int(data[it]["count"])
+		if method=="reddit":
+			if "num_crossposts" in data:
+				_val+= int(data["num_crossposts"])
+		if method=="majestic":
+			_val = 0
+		if method=="youtube":
+			_val = 0
+		if method=="telegram":
+			if "forwards" in data and data["forwards"] is not None:
+				_val += int(data["forwards"])
+		if method=="tiktok":
+			_val = 0
+		if method=="gab":
+			_val = 0
+			fields = ["reblogs_count"]
 			for field in fields:
 				if field in data:
 					_val+=int(data[field])

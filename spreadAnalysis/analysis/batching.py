@@ -10,14 +10,17 @@ import numpy as np
 from operator import itemgetter
 import sys
 import gc
+import multiprocessing
 from multiprocessing import Pool, Manager, set_start_method, get_context
 import networkx as nx
 from collections import defaultdict,Counter
 from spreadAnalysis.io.config_io import Config
 from datetime import datetime, timedelta
 import warnings
+import polars as pl
+from sklearn import preprocessing
 from newspaper import Article
-from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne
+from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne, UpdateMany
 
 def bi_to_uni(data):
 
@@ -40,6 +43,7 @@ def update_actor_message(new=False):
 	actor_db = mdb.database["actor_platform_post"]
 	try:
 		actor_db.drop_index('actor_-1')
+		actor_db.drop_index('platform_-1')
 	except:
 		pass
 	if new:
@@ -96,7 +100,7 @@ def update_actor_message(new=False):
 										"actor":actor,"actor_label":actor_label,"platform":platform,
 										"post_obj_ids":[],"actor_platform":actor_platform,"domain":domain}
 				batch_insert[actor_platform]["post_obj_ids"].append(post_obj_id)
-				if len(batch_insert) >= 10000:
+				if len(batch_insert) >= 100000:
 					mdb.write_many(actor_db,list(batch_insert.values()),key_col="actor_platform",sub_mapping="post_obj_ids")
 					batch_insert = {}
 				if count % 100000 == 0:
@@ -104,24 +108,156 @@ def update_actor_message(new=False):
 	if len(batch_insert) > 0:
 		mdb.write_many(actor_db,list(batch_insert.values()),key_col="actor_platform",sub_mapping="post_obj_ids")
 	actor_db.create_index([ ("actor", -1) ])
+	actor_db.create_index([ ("platform", -1) ])
+
+def create_enga_transformer_actor(mdb,n_sample=10000):
+
+	def transform_per_platform_multi(df,vals,cat_var,appr=False):
+    
+		dfs = []
+		lambdas = {}
+		for cat in set(list(df[cat_var])):
+			new_df = df.copy()[df[cat_var]==cat]
+			x = new_df[vals] #returns a numpy array
+			min_max_scaler = preprocessing.PowerTransformer(method='yeo-johnson', standardize=True, copy=True)
+			x_scaled = min_max_scaler.fit_transform(x)
+			x_scaled = pd.DataFrame(x_scaled,columns=[val+"_yj" for val in vals],index=new_df.index)
+			new_df[[val+"_yj" for val in vals]] = x_scaled
+			dfs.append(new_df)
+			lambdas[cat]=min_max_scaler
+		return pd.concat(dfs,axis=0), lambdas
+
+	def normalize_per_platform_multi(df,vals,cat_var,appr=False):
+		
+		dfs = []
+		lambdas = {}
+		for cat in set(list(df[cat_var])):
+			new_df = df.copy()[df[cat_var]==cat]
+			x = new_df[vals] #returns a numpy array
+			min_max_scaler = preprocessing.MinMaxScaler()
+			x_scaled = min_max_scaler.fit_transform(x)
+			x_scaled = pd.DataFrame(x_scaled,columns=[val+"_norm" for val in vals],index=new_df.index)
+			new_df[[val+"_norm" for val in vals]] = x_scaled
+			dfs.append(new_df),min_max_scaler
+			lambdas[cat]=min_max_scaler
+		return pd.concat(dfs,axis=0),lambdas
+
+	def get_scaler_per_group(df,val,group,scaler=preprocessing.MinMaxScaler()):
+		
+		scaler_per_group = {}
+		df_enga,lams = transform_per_platform_multi(df,["engagement"],"platform")
+		df_enga,lams1 = normalize_per_platform_multi(df_enga,["engagement_yj"],"platform")
+		for cat in set(list(df[group])):
+			scaler_per_group[cat]=[lams[cat],lams1[cat]]
+		return scaler_per_group
+	
+	pls = ["twitter","facebook","instagram","telegram","gab","youtube","fourchan","vkontakte","reddit"]
+	data = []
+	for pl in pls:
+		docs = mdb.database["actor_metric"].aggregate([{ "$match": { "platform":{"$eq":pl}}} ,{"$sample":{"size":n_sample}}])
+		for doc in docs:
+			data_doc = {}
+			for f in ["reactions_mean","shares_mean","comments_mean","platform"]:
+				data_doc[f]=doc[f]
+				if pl == "reddit" and f == "reactions_mean":
+					data_doc[f]=0.0
+				if pl == "twitter" and f == "reactions_mean":
+					data_doc[f]=doc[f]+doc["followers_mean"]
+			data.append(data_doc)
+	df = pd.DataFrame(data)
+	df["engagement"]=df["comments_mean"]+df["reactions_mean"]+df["shares_mean"]
+	s_p_g = get_scaler_per_group(df,"engagement","platform",scaler=[preprocessing.PowerTransformer(method='yeo-johnson', standardize=True, copy=True),preprocessing.MinMaxScaler()])
+	"""data = pd.DataFrame([{'reactions_mean': 61.111111111111114, 'shares_mean': 0.3333333333333333, 'comments_mean': 0.1111111111111111, 'platform': 'twitter'}])
+	data["engagement"]=data["comments_mean"]+data["reactions_mean"]+data["shares_mean"]
+	e = s_p_g["twitter"][0].transform(data[["engagement"]])
+	print (df[df["platform"]=="twitter"].sort_values("engagement",ascending=False))
+	print (e)
+	print (s_p_g["twitter"][1].transform(e))
+	sys.exit()"""
+
+	return s_p_g
+
+def create_enga_transformer(mdb,n_sample=(25000,10000)):
+
+	def get_scaler_per_group(df,val,group,scaler=preprocessing.MinMaxScaler()):
+		
+		scaler_per_group = {}
+		for cat in set(list(df[group])):
+			new_df = df.copy()[df[group]==cat]
+			x = new_df[[val]]
+			if isinstance(scaler,list):
+				all_scalers = []
+				for scale in scaler:
+					scale.fit(x)
+					all_scalers.append(scale)
+				scaler_per_group[cat]=all_scalers
+			else:
+				scaler.fit(x)
+				scaler_per_group[cat]=scaler
+		return scaler_per_group
+	
+	pls = ["twitter","facebook","instagram","telegram","gab","youtube","fourchan","vkontakte","reddit"]
+	n_actors = n_sample[0]
+	n_posts = n_sample[1]
+	aps = {k:[] for k in pls}
+	for pl in pls:
+		docs = mdb.database["actor_platform_post"].aggregate([{ "$match": { "platform":{"$eq":pl}}} ,{"$sample":{"size":n_actors}},{"$project": { "actor_platform": 1}}])
+		for doc in docs:
+			aps[pl].append(doc["actor_platform"])
+	pl_sampls = {k:[] for k in pls}
+	for pl in pls:
+		while len(pl_sampls[pl]) < n_posts:
+			doc = mdb.database["actor_platform_post"].find_one({"actor_platform":random.choice(aps[pl])})
+			if doc is not None:
+				oids = list(doc["post_obj_ids"])
+				if pl == "twitter":
+					is_not_rt_count = 0
+					random.shuffle(oids)
+					for oid in oids:
+						post = mdb.database["post"].find_one({"_id":oid})
+						if not Spread._get_is_retweet(data=post,method=post["method"]) and not Spread._get_is_reply(data=post,method=post["method"]):
+							pl_sampls[pl].append(post)
+							is_not_rt_count+=1
+						if is_not_rt_count>=2:
+							break
+				else:
+					for r in range(2):
+						pl_sampls[pl].append(mdb.database["post"].find_one({"_id":random.choice(oids)}))
+	data = []
+	for k,v in pl_sampls.items():
+		for d in v:
+			doc = {}
+			if k == "twitter":
+				doc.update({"engagement":(Spread._get_engagement(data=d,method=d["method"]))})
+			else:
+				doc.update({"engagement":Spread._get_engagement(data=d,method=d["method"])})
+			doc.update({"platform":Spread._get_platform(data=d,method=d["method"])})
+			data.append(doc)
+	df = pd.DataFrame(data)
+	return get_scaler_per_group(df,"engagement","platform",scaler=[preprocessing.PowerTransformer(method='yeo-johnson', standardize=True, copy=True),preprocessing.MinMaxScaler()])
 
 def aggregate_actor_data(args):
 
 	actor_batch = args[0]
 	actor_info = args[1]
 	process_id = args[2]
+	enga_trans = args[3]
 	actor_data = []
 	mdb = MongoSpread()
 	actor_count = 0
 	for actor, poids in actor_batch.items():
 		actor_count+=1
-		#print (actor + " - " + str(actor_count) + " - " + str(len(poids)) + " for process " + str(process_id))
+		print (actor + " - " + str(actor_count) + " - " + str(len(poids)) + " for process " + str(process_id))
 		most_popular_url_shared = defaultdict(int)
 		unique_domains = set([])
 		most_often_shared_domain = []
 		posts = set([])
 		langs = []
 		interactions = []
+		engagement = []
+		reactions = []
+		comments = []
+		shares = []
 		text_lengths = []
 		post_dates = []
 		followers = []
@@ -131,19 +267,27 @@ def aggregate_actor_data(args):
 			#posts.add(poid)
 			#post_doc = mdb.database["post"].find_one({"_id":poid})
 			langs.append(Spread._get_lang(data=post_doc,method=post_doc["method"],model=None))
+			platform = Spread._get_platform(data=post_doc,method=post_doc["method"])
 			interactions.append(Spread._get_interactions(data=post_doc,method=post_doc["method"]))
+			if platform == "twitter":
+				engagement.append((Spread._get_engagement(data=post_doc,method=post_doc["method"])))
+			else:
+				engagement.append(Spread._get_engagement(data=post_doc,method=post_doc["method"]))
+			reactions.append(Spread._get_reactions(data=post_doc,method=post_doc["method"]))
+			comments.append(Spread._get_comments(data=post_doc,method=post_doc["method"]))
+			shares.append(Spread._get_shares(data=post_doc,method=post_doc["method"]))
 			text_lengths.append(len(Spread._get_message_text(data=post_doc,method=post_doc["method"])))
 			post_dates.append(Spread._get_date(data=post_doc,method=post_doc["method"]))
 			followers.append(Spread._get_followers(data=post_doc,method=post_doc["method"]))
-			platform = Spread._get_platform(data=post_doc,method=post_doc["method"])
 			account_type = Spread._get_account_type(data=post_doc,method=post_doc["method"])
 			account_category = Spread._get_account_category(data=post_doc,method=post_doc["method"])
 			link_to_actor = Spread._get_link_to_actor(data=post_doc,method=post_doc["method"])
 
 			url = Spread._get_message_link(data=post_doc,method=post_doc["method"])
 			if url is not None:
-				url = LinkCleaner().single_clean_url(url)
-				url = LinkCleaner().sanitize_url_prefix(url)
+				url = LinkCleaner().single_standardize_url(url)
+				url = LinkCleaner().single_standardize_url(url)
+				url = LinkCleaner().single_standardize_url(url)
 				domain = Spread._get_message_link_domain(data=post_doc,method=post_doc["method"])
 				most_popular_url_shared[url]+=1
 				unique_domains.add(domain)
@@ -156,6 +300,9 @@ def aggregate_actor_data(args):
 			most_shared_domain = None
 		real_post_dates = [hlp.to_default_date_format(d) for d in post_dates if d is not None]
 		#print ("aggregating")
+		for scaler in enga_trans[platform]:
+			new_enga = scaler.transform(np.array(engagement).reshape(-1, 1))
+			new_enga = scaler.transform(new_enga)
 		actor_doc = {  "actor_name":actor_info[actor]["actor_label"],
 						"actor":actor_info[actor]["actor"],
 						"actor_username":actor_info[actor]["actor_username"],
@@ -167,6 +314,16 @@ def aggregate_actor_data(args):
 						"lang":sorted(dict(Counter(langs)).items(), key = itemgetter(1), reverse=True)[0][0],
 						"interactions_mean":np.nanmean(np.array(interactions,dtype=np.float64)),
 						"interactions_std":np.nanstd(np.array(interactions,dtype=np.float64)),
+						"engagement_trans_mean":np.nanmean(new_enga,dtype=np.float64),
+						"engagement_trans_std":np.nanstd(new_enga,dtype=np.float64),
+						"engagement_mean":np.nanmean(engagement,dtype=np.float64),
+						"engagement_std":np.nanstd(engagement,dtype=np.float64),
+						"reactions_mean":np.nanmean(reactions,dtype=np.float64),
+						"reactions_std":np.nanstd(reactions,dtype=np.float64),
+						"comments_mean":np.nanmean(comments,dtype=np.float64),
+						"comments_std":np.nanstd(comments,dtype=np.float64),
+						"shares_mean":np.nanmean(shares,dtype=np.float64),
+						"shares_std":np.nanstd(shares,dtype=np.float64),
 						"message_length_mean":np.nanmean(np.array(text_lengths,dtype=np.float64)),
 						"message_length_std":np.nanstd(np.array(text_lengths,dtype=np.float64)),
 						"first_post_observed":min(real_post_dates),
@@ -184,11 +341,12 @@ def aggregate_actor_data(args):
 	#print ("returning " + str(process_id))
 	return actor_data
 
-def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
+def update_agg_actor_metrics(num_cores=1,new=False,skip_existing=False,missing=False):
 
 	warnings.filterwarnings('ignore')
 	np.seterr(all="ignore")
 	mdb = MongoSpread()
+	pls = ["twitter","facebook","instagram","telegram","gab","youtube","fourchan","vkontakte","reddit"]
 	batch_size = 1000*num_cores
 	actor_count = 0
 	actor_metric_db = mdb.database["actor_metric"]
@@ -197,29 +355,40 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
 	actor_platform = True
 	batch_insert = {}
 	actor_info = {}
-	if not full:
-		max_upd_date = list(actor_metric_db.find().sort("updated_at",-1).limit(1))
-		if max_upd_date is None or len(max_upd_date) < 1 or "updated_at" not in max_upd_date[0]:
-			max_upd_date = list(actor_metric_db.find().sort("inserted_at",-1).limit(1))
-			if max_upd_date is None or len(max_upd_date) < 1:
-				max_upd_date = datetime(2000,1,1)
-			else:
-				max_upd_date = max_upd_date[0]["inserted_at"]
+	if not missing:
+		if new:
+			actor_metric_db.drop()
+			actor_metric_db = mdb.database["actor_metric"]
+			mdb.create_indexes()
+			actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"platform":{"$in":pls}},{"_id":1})]
 		else:
-			max_upd_date = max_upd_date[0]["updated_at"]
-		max_upd_date = max_upd_date-timedelta(days=2)
-		if skip_existing: max_upd_date = datetime(2000,1,1)
-		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
-		random.shuffle(actor_obj_ids)
+			actor_metric_db.drop_index('actor_-1')
+			actor_metric_db.drop_index('platform_-1')
+			max_upd_date = list(actor_metric_db.find().sort("updated_at",-1).limit(1))
+			if max_upd_date is None or len(max_upd_date) < 1 or "updated_at" not in max_upd_date[0]:
+				max_upd_date = list(actor_metric_db.find().sort("inserted_at",-1).limit(1))
+				if max_upd_date is None or len(max_upd_date) < 1:
+					max_upd_date = datetime(2000,1,1)
+				else:
+					max_upd_date = max_upd_date[0]["inserted_at"]
+			else:
+				max_upd_date = max_upd_date[0]["updated_at"]
+			max_upd_date = max_upd_date-timedelta(days=2)
+			if skip_existing: max_upd_date = datetime(2000,1,1)
+			actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"platform":{"$in":pls}},{"$or":[ {"updated_at": {"$gt": max_upd_date}}, {"inserted_at": {"$gt": max_upd_date}}]},{"_id":1})]
 	else:
 		actor_platform_ids = set([])
-		already_updated = set(set([d["actor_platform"] for d in actor_metric_db.find({},{"actor_platform":1})]))
-		actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_platform_db.find({},{"actor_platform":1}) if d["actor_platform"] not in already_updated])))
+		#already_updated = set(set([d["actor_platform"] for d in actor_metric_db.find({},{"actor_platform":1})]))
+		#actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_platform_db.find({"platform":{"$in":pls}},{"actor_platform":1}) if d["actor_platform"] not in already_updated])))
 		print (len(actor_platform_ids))
-		actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_metric_db.find({"actor_name":{"$exists":False}},{"actor_platform":1})])))
+		#actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_metric_db.find({"actor_name":{"$exists":False}},{"actor_platform":1})])))
+		actor_platform_ids.update(set(set([d["actor_platform"] for d in actor_metric_db.find({"platform":{"$ne":"twitter"}},{"actor_platform":1})])))
 		print (len(actor_platform_ids))
-		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({},{"actor_platform":1,"_id":1}) if d["actor_platform"] in actor_platform_ids]
+		actor_obj_ids = [d["_id"] for d in actor_platform_db.find({"platform":{"$in":pls}},{"actor_platform":1,"_id":1}) if d["actor_platform"] in actor_platform_ids]
 		print (len(actor_obj_ids))
+	print ("Creating engagement transformation")
+	enga_trans = create_enga_transformer(mdb)
+	random.shuffle(actor_obj_ids)
 	for a_obj in actor_obj_ids:
 		actor_count += 1
 		if actor_count % 10000 == 0:
@@ -237,21 +406,23 @@ def update_agg_actor_metrics(num_cores=12,skip_existing=False,full=False):
 										"actor":actor_platform["actor"]}
 		if len(batch_insert) >= batch_size or actor_platform is None:
 			if num_cores > 1:
-				chunked_batches = [(l,actor_info,i) for i,l in enumerate(hlp.chunks_optimized(batch_insert,num_cores,verbose=False))]
+				chunked_batches = [(l,actor_info,i,enga_trans) for i,l in enumerate(hlp.chunks_optimized(batch_insert,num_cores,verbose=False))]
 				pool = Pool(num_cores)
 				#with get_context("spawn").Pool(num_cores) as pool:
 				results = pool.map(aggregate_actor_data,chunked_batches)
 				pool.close()
 				pool.join()
 			else:
-				results = [aggregate_actor_data((batch_insert,actor_info,0))]
+				results = [aggregate_actor_data((batch_insert,actor_info,0,enga_trans))]
 			#print ("inserting")
 			for result in results:
 				mdb.write_many(actor_metric_db,result,key_col="actor_platform")
 			batch_insert = {}
 			actor_info = {}
 	#cur.close()
-	mdb.write_many(actor_metric_db,aggregate_actor_data((batch_insert,actor_info,0)),key_col="actor_platform")
+	mdb.write_many(actor_metric_db,aggregate_actor_data((batch_insert,actor_info,0,enga_trans)),key_col="actor_platform")
+	actor_metric_db.create_index([ ("actor", -1) ])
+	actor_metric_db.create_index([ ("platform", -1) ])
 	mdb.close()
 
 def filter_docs(args):
@@ -399,6 +570,42 @@ def multi_find_urls(org_urls):
 
 	prev_urls = set(find_urls(selection={},urls=org_urls))
 	return prev_urls
+
+def _find_domains_per_actor(actors):
+
+	mdb = MongoSpread()
+	data = []
+	for doc in mdb.database["url_bi_network"].aggregate([{"$match":{"actor_platform":{"$in":list(actors)}}},{"$group":{"_id":{"actor_platform":"$actor_platform", "domain":"$domain"}, "total":{"$sum":{"$size":"$message_ids"}}}}]):
+		data_doc = {"actor_platform":doc["_id"]["actor_platform"],"domain":doc["_id"]["domain"],"count":doc["total"]}
+		if data_doc["domain"] is not None:
+			if "youtube.com" in data_doc["domain"]: data_doc["domain"]="youtube.com"
+			data.append(data_doc)
+	return data
+
+def multi_find_domains_per_actor(actors,ncores=-1):
+
+	def nchunks(l, n):
+		for i in range(0, n):
+				yield l[i::n]
+
+	url_shorts = set(list(set(list(pd.read_csv("/work/JakobBækKristensen#1091/alterpublics/projects/full_test"+"/"+"url_shorteners.csv")["domain"]))))
+	min10_doms = pl.read_csv(Config().PROJECT_PATH+"/full_test/domain_per_actor_min10.csv")
+	min10_doms_set = set(min10_doms["domain"].to_list())
+	min10_doms_set.add("youtube.com")
+	if ncores == -1:
+		ncores = multiprocessing.cpu_count()-2
+	all_results = []
+	outer_chunk_size = 1
+	if len(actors) > 60000:
+		outer_chunk_size = 20
+	for outer_chunk in nchunks(actors,outer_chunk_size):
+		results = Pool(ncores).map(_find_domains_per_actor,nchunks(list(outer_chunk),ncores))
+		for result in results:
+			all_results.extend(result)
+	df = pl.from_dicts(all_results)
+	df = df.filter((pl.col("domain").is_in(min10_doms_set))&(~pl.col("domain").is_in(url_shorts)))
+	df = df.join(min10_doms.select(pl.col(["domain","idf"])),on="domain",how="left")
+	return df
 
 def find_urls(selection={},urls=[]):
 
@@ -822,29 +1029,58 @@ def update_actor_data(actors=[],extra_data=None,extra_data_key="actor"):
 
 def update_cleaned_urls():
 
+	import urllib.parse
+
+	def clean_the_clean(url):
+		new_url = str(url)
+		if "facebook" in new_url and "login" in new_url and "next=" in new_url:
+			new_url = urllib.parse.unquote(new_url.split("next=")[-1])
+		if "instagram" in new_url and "login" in new_url and "next=" in new_url:
+			new_url = "instagram.com" + new_url.split("next=")[-1]
+		return new_url
+
 	print ("updating cleaned urls")
 	mdb = MongoSpread()
 	e_cleaned = []
 	e_non_cleaned = []
+	identical = []
 	clean_version = {}
 	rest = []
 	no_dups = set([])
 	count = 0
-	for url_cl in mdb.database["clean_url"].find().limit(5000000000):
+	"""for doc in mdb.database["clean_url"].aggregate([{"$group":{"_id":"$clean_url","count":{"$sum":1}}},{"$sort": { "count": -1 }},{"$limit":10000000000}]):
+		if "facebook" in str(doc["_id"]) and "login" in str(doc["_id"]):
+			print (clean_the_clean(str(doc["_id"])))
+		if "instagram" in str(doc["_id"]) and "login" in str(doc["_id"]):
+			print (clean_the_clean(str(doc["_id"])))
+	sys.exit()"""
+
+	url_shorts = set(list(set(list(pd.read_csv("/work/JakobBækKristensen#1091/alterpublics/projects/full_test"+"/"+"url_shorteners.csv")["domain"]))))
+	for url_cl in mdb.database["clean_url"].find().limit(102222000):
 		count+=1
-		if url_cl["clean_url"] is not None:
-			if url_cl["url"] not in no_dups:
-				u_cl = mdb.database["url_bi_network"].find_one({"url":url_cl["clean_url"]})
-				if u_cl is not None:
-					e_cleaned.append(u_cl["url"])
-				if u_cl is None:
-					u = mdb.database["url_bi_network"].find_one({"url":url_cl["url"]})
-					if u is not None:
-						e_non_cleaned.append(u["url"])
-						clean_version[u["url"]]=url_cl["clean_url"]
-					else:
-						rest.append(url_cl["url"])
-				no_dups.add(url_cl["url"])
+		if LinkCleaner().extract_special_url(url_cl["url"]) in url_shorts:
+			url_cl["url"]=LinkCleaner().remove_url_prefix(url_cl["url"])
+			if url_cl["clean_url"] is not None:
+				if url_cl["url"] not in no_dups:
+					u_cl = mdb.database["url_bi_network"].find_one({"url":url_cl["clean_url"]})
+					if u_cl is not None and "cleaned" in u_cl and u_cl["cleaned"]==True:
+						e_cleaned.append(u_cl["url"])
+					if u_cl is None:
+						u = mdb.database["url_bi_network"].find_one({"url":url_cl["url"]})
+						if u is not None:
+							cleaned_v = url_cl["clean_url"]
+							cleaned_v = clean_the_clean(cleaned_v)
+							cleaned_v = LinkCleaner().single_standardize_url(cleaned_v)
+							cleaned_v = LinkCleaner().single_standardize_url(cleaned_v)
+							cleaned_v = LinkCleaner().single_standardize_url(cleaned_v)
+							if u["url"] != cleaned_v:
+								e_non_cleaned.append(u["url"])
+								clean_version[u["url"]]=cleaned_v
+							else:
+								identical.append(u["url"])
+						else:
+							rest.append(url_cl["url"])
+					no_dups.add(url_cl["url"])
 		if count % 1000 == 0:
 			print (count)
 
@@ -853,15 +1089,14 @@ def update_cleaned_urls():
 		print (str(uc)+"  -  "+str(clean_version[uc]))
 	print (len(e_cleaned))
 	print (len(e_non_cleaned))
+	print (len(identical))
 	print (len(rest))
-	#print (e_non_cleaned)
-	#sys.exit()
 
 	print ("writing cleaned urls to database")
 	bulks = []
 	for uc in e_non_cleaned:
-		bulks.append(UpdateOne({"url":uc},
-									{'$set': {"url":str(clean_version[uc]),"domain":LinkCleaner().extract_special_url(str(clean_version[uc]))}}))
+		bulks.append(UpdateMany({"url":uc},
+									{'$set': {"url":str(clean_version[uc]),"domain":LinkCleaner().extract_special_url(str(clean_version[uc])),"cleaned":True,"before_clean":uc}}))
 	mdb.database["url_bi_network"].bulk_write(bulks)
 	print ("done writing to database!")
 
@@ -922,8 +1157,44 @@ def update_url_texts(num_cores=2):
 					mdb.insert_many(mdb.database["url_texts"],list(results))
 					temp_urls = []
 
+def batch_domain_per_actor():
+
+	batch_path = Config().PROJECT_PATH+"/full_test/domain_per_actor"
+
+	"""df = pl.read_csv(batch_path+".csv")
+	print (len(df))
+	df = df.filter((pl.col("t_freq")>9))
+	df.write_csv(batch_path+"_min10.csv")
+	print (len(df))
+	sys.exit()"""
+
+	mdb = MongoSpread()
+	all_docs = {"domain":[],"d_freq":[],"t_freq":[],"idf":[],"tfidf":[],"logn_tfidf":[]}
+	N_DOCS = 10259859
+	query = mdb.database["url_bi_network"].aggregate([{"$group":{"_id":"$domain", "uniqueValuesOfB":{"$addToSet":"$actor_platform"}, "totalLengthOfC":{"$sum":{"$size":"$message_ids"}}}},{"$project":{"countOfUniqueB":{"$size":"$uniqueValuesOfB"}, "totalLengthOfC":1}}])
+	q_count = 0
+	for doc in query:
+		if doc is not None and doc["_id"] is not None:
+			all_docs["domain"].append(doc["_id"])
+			all_docs["d_freq"].append(doc["countOfUniqueB"])
+			all_docs["t_freq"].append(doc["totalLengthOfC"])
+			idf = np.log(N_DOCS/(1+doc["countOfUniqueB"]))+1
+			all_docs["idf"].append(idf)
+			tfidf = doc["totalLengthOfC"]*idf
+			logn_tfidf = np.log(doc["totalLengthOfC"]+1)*idf
+			all_docs["tfidf"].append(tfidf)
+			all_docs["logn_tfidf"].append(logn_tfidf)
+		q_count+=1
+		if q_count % 1000 == 0:
+			print (q_count)
+	df = pl.from_dict(all_docs)
+	df = df.filter((pl.col("t_freq")>9))
+	df.write_csv(batch_path+"_min10.csv")
+
 if __name__ == "__main__":
 	#update_actor_message()
 	#update_agg_actor_metrics(skip_existing=True)
-	update_url_texts(num_cores=1)
+	#update_url_texts(num_cores=1)
+	#update_cleaned_urls()
+	batch_domain_per_actor()
 	sys.exit()

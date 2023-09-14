@@ -72,6 +72,8 @@ import pymongo
 from pymongo import MongoClient
 import pandas as pd
 import numpy as np
+import multiprocessing
+from multiprocessing import Pool
 from datetime import datetime, timedelta
 from spreadAnalysis.utils.link_utils import LinkCleaner
 from pymongo import InsertOne, DeleteOne, ReplaceOne, UpdateOne
@@ -85,12 +87,64 @@ import time
 import sys
 import random
 
+def _multi_update_url(data):
+
+	posts = data
+	global actor_aliases
+	batch_insert = {}
+	for post in posts:
+		url = Spread._get_message_link(data=post,method=post["method"])
+		if url is not None:
+			url = LinkCleaner().single_standardize_url(url)
+			actor_username = Spread._get_actor_username(data=post,method=post["method"])
+			actor_id = Spread._get_actor_id(data=post,method=post["method"])
+			platform = Spread._get_platform(data=post,method=post["method"])
+			platform_type = Spread._get_platform_type(data=post,method=post["method"])
+			domain = Spread._get_message_link_domain(data=post,method=post["method"])
+			if actor_username in actor_aliases and platform_type in actor_aliases[actor_username]:
+				actor = actor_aliases[actor_username][platform_type]
+				actor_platform = str(actor)+"_"+str(platform_type)
+				actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+			elif actor_id in actor_aliases and platform_type in actor_aliases[actor_id]:
+				actor = actor_aliases[actor_id][platform_type]
+				actor_platform = str(actor)+"_"+platform_type
+				actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+			else:
+				actor = actor_username
+				actor_platform = str(actor_username)+"_"+platform_type
+				actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
+			if url is not None:
+				url = LinkCleaner().single_standardize_url(url)
+				url = LinkCleaner().single_standardize_url(url)
+				if (url,actor) not in batch_insert:
+					batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
+										"actor":actor,"actor_label":actor_label,"platform":platform,
+										"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+				batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
+			for extra_url in Spread._get_all_external_message_links(data=post,method=post["method"]):
+				domain = LinkCleaner().extract_special_url(extra_url)
+				extra_url = LinkCleaner().single_standardize_url(extra_url)
+				extra_url = LinkCleaner().single_standardize_url(extra_url)
+				if extra_url is not None:
+					if extra_url != url and not LinkCleaner().is_url_domain(extra_url):
+						extra_url = LinkCleaner().single_standardize_url(extra_url)
+						if (extra_url,actor) not in batch_insert:
+							batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
+												"actor":actor,"actor_label":actor_label,"platform":platform,
+												"message_ids":[],"actor_platform":actor_platform,"domain":domain}
+						batch_insert[(extra_url,actor)]["message_ids"].append(post["message_id"])
+	return batch_insert
+
+
+
 def _multi_unpack_url(old_url):
 
-	conf = Config()
-	scrp = Scraper(settings={"change_user_agent":True,"exe_path":conf.CHROMEDRIVER})
-	scrp.browser_init()
-	new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
+	#conf = Config()
+	#scrp = Scraper(settings={"change_user_agent":True,"exe_path":conf.CHROMEDRIVER})
+	#scrp.browser_init()
+	#new_url = LinkCleaner(scraper=scrp).clean_url(old_url,with_unpack=True,force_unpack=True)
+
+	new_url = LinkCleaner().clean_url(old_url,with_unpack=True,force_unpack=False)
 
 	return (old_url,new_url)
 
@@ -98,7 +152,7 @@ class MongoDatabase:
 
 	def __init__(self):
 
-		self.client = MongoClient('mongodb://localhost:27017/')
+		self.client = MongoClient('mongodb://localhost:27017/', maxPoolSize=500)
 		self.database = self.client["spreadAnalysis"]
 
 	def close(self):
@@ -245,11 +299,11 @@ class MongoDatabase:
 
 		doc["updated_at"]=datetime.now()
 		if isinstance(nest_keys[0],tuple):
-			db.update(
+			db.update_many(
 				{ nest_keys[0][0]: nest_keys[0][1], nest_keys[1][0]: nest_keys[1][1]},
 				{ "$push": {"attempts":doc}})
 		else:
-			db.update(
+			db.update_many(
 				{ nest_keys[0]: nest_keys[1]},
 				{ "$push": {"attempts":doc}})
 
@@ -594,8 +648,8 @@ class MongoSpread(MongoDatabase):
 				net_db.drop()
 				net_db = self.database["url_bi_network"]
 				self.create_indexes()
-				net_db.drop_index('actor_-1')
-				net_db.drop_index('domain_-1')
+				#net_db.drop_index('actor_-1')
+				#net_db.drop_index('domain_-1')
 			max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
 			if max_net_date is None or len(max_net_date) < 1:
 				max_net_date = datetime(2000,1,1)
@@ -622,7 +676,8 @@ class MongoSpread(MongoDatabase):
 				post = next_post
 				url = Spread._get_message_link(data=post,method=post["method"])
 				if url is not None:
-					url = LinkCleaner().single_clean_url(url)
+					#url = LinkCleaner().single_clean_url(url)
+					#url = LinkCleaner().sanitize_url_prefix(url)
 					url = LinkCleaner().sanitize_url_prefix(url)
 					actor_username = Spread._get_actor_username(data=post,method=post["method"])
 					actor_id = Spread._get_actor_id(data=post,method=post["method"])
@@ -641,15 +696,16 @@ class MongoSpread(MongoDatabase):
 						actor = actor_username
 						actor_platform = str(actor_username)+"_"+platform_type
 						actor_label = str(Spread._get_actor_name(data=post,method=post["method"]))+" ({0})".format(str(platform_type))
-					if (url,actor) not in batch_insert:
+					if url is not None and (url,actor) not in batch_insert:
 						batch_insert[(url,actor)]={"url":url,"actor_username":actor_username,
 											"actor":actor,"actor_label":actor_label,"platform":platform,
 											"message_ids":[],"actor_platform":actor_platform,"domain":domain}
 					batch_insert[(url,actor)]["message_ids"].append(post["message_id"])
 					for extra_url in Spread._get_all_external_message_links(data=post,method=post["method"]):
-						extra_url = LinkCleaner().single_clean_url(extra_url)
+						#extra_url = LinkCleaner().single_clean_url(extra_url)
+						#extra_url = LinkCleaner().sanitize_url_prefix(extra_url)
 						extra_url = LinkCleaner().sanitize_url_prefix(extra_url)
-						if extra_url != url and not LinkCleaner().is_url_domain(extra_url):
+						if extra_url is not None and extra_url != url and not LinkCleaner().is_url_domain(extra_url):
 							if (extra_url,actor) not in batch_insert:
 								domain = LinkCleaner().extract_special_url(extra_url)
 								batch_insert[(extra_url,actor)]={"url":extra_url,"actor_username":actor_username,
@@ -667,6 +723,69 @@ class MongoSpread(MongoDatabase):
 			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
 		net_db.create_index([ ("actor", -1) ])
 		net_db.create_index([ ("domain", -1) ])
+
+	def update_url_bi_network2(self,new=False,custom_query=None,parallel=False,exclude_platforms=set(["web"])):
+
+		net_db = self.database["url_bi_network"]
+		#aliases = self.get_aliases()
+		global actor_aliases
+		actor_aliases = self.get_actor_aliases(platform_sorted=False)
+		post_db = self.database["post"]
+		try:
+			net_db.drop_index('actor_-1')
+			net_db.drop_index('domain_-1')
+			net_db.drop_index('actor_platform_-1')
+		except:
+			pass
+		if new:
+			sys.exit()
+			net_db.drop()
+			net_db = self.database["url_bi_network"]
+			self.create_indexes()
+			#net_db.drop_index('actor_-1')
+			#net_db.drop_index('domain_-1')
+		max_net_date = list(net_db.find().sort("inserted_at",-1).limit(1))
+		#max_net_date = None
+		if max_net_date is None or len(max_net_date) < 1:
+			max_net_date = datetime(2000,1,1)
+			cur = post_db.find()
+		else:
+			if "updated_at" in max_net_date[0]:
+				max_net_date = max_net_date[0]["updated_at"]
+			elif "inserted_at" in max_net_date[0]:
+				max_net_date = max_net_date[0]["inserted_at"]
+			max_net_date = max_net_date-timedelta(days=4)
+			cur = post_db.find({"$or":[ {"updated_at": {"$gt": max_net_date}}, {"inserted_at": {"$gt": max_net_date}}]})
+		next_post = True
+		seen_ids = set([])
+		count = 0
+		posts_p = []
+		new_batch = datetime.now()
+		while next_post is not None:
+			count += 1
+			next_post = next(cur, None)
+			if next_post is not None:
+				post = next_post
+				if Spread._get_platform(data=post,method=post["method"]) not in exclude_platforms:
+					posts_p.append(post)
+				if len(posts_p) >= 100000:
+					if parallel:
+						ncores = multiprocessing.cpu_count()-2
+						data = [chunk for chunk in hlp.chunks(posts_p,ncores)]
+						results = Pool(ncores).map(_multi_update_url,data)
+					else:
+						results = [_multi_update_url(posts_p)]
+					for batch_insert in results:
+						self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+					posts_p = []
+			if count % 100000 == 0:
+				print ("post loop " + str(count)+" processed in {} seconds".format((datetime.now()-new_batch).total_seconds()))
+				new_batch = datetime.now()
+		if len(batch_insert) > 0:
+			self.write_many(net_db,list(batch_insert.values()),key_col=("url","actor_platform"),sub_mapping="message_ids")
+		net_db.create_index([ ("actor", -1) ])
+		net_db.create_index([ ("domain", -1) ])
+		net_db.create_index([ ("actor_platform", -1) ])
 
 	def update_clean_urls(self,shorten_domains,num_cores=12,only_insert=False,update_cleaned=False):
 

@@ -8,7 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import signal
+#import signal
 import timeout_decorator
 from timeout_decorator import TimeoutError
 from requests.exceptions import ConnectionError
@@ -26,6 +26,96 @@ class LinkUtils:
 	def __init__(self):
 
 		pass
+	
+	def url_valid(self,url):
+
+		#if self.is_url_domain(url):
+			#return False
+		if "." not in str(self.remove_url_prefix(url)):
+			return False
+
+		return True
+	
+	def lower_case_domain(self,url):
+
+		new_url = self.remove_url_prefix(url)
+		if "/" in str(new_url):
+			dom = new_url.split("/")[0]
+		elif "?" in new_url:
+			dom = new_url.split("?")[0]
+		elif "&" in new_url:
+			dom = new_url.split("&")[0]
+		else:
+			dom = new_url.split("/")[0]
+		ldom = dom.lower()
+		new_url = url.replace(dom,ldom)
+		return new_url
+		
+	def clean_special_case(self,url):
+
+		new_url = url
+		if "youtube.com/" in str(new_url) and "v=" in str(new_url):
+			vcode = new_url.split("v=")[-1].split("&")[0]
+			if "?" in vcode: vcode = vcode.split("?")[0]
+			new_url = "https://youtube.com/watch?v="+vcode
+		elif "youtu.be/" in str(new_url):
+			vcode = new_url.split("/")[-1]
+			if "?" in vcode: vcode = vcode.split("?")[0]
+			#if "/" in vcode: vcode = vcode.split("/")[0]
+			#if "?" in vcode: vcode = vcode.split("?")[0]
+			#if "&" in vcode: vcode = vcode.split("&")[0]
+			#if "#" in vcode: vcode = vcode.split("#")[0]
+			new_url = "https://youtube.com/watch?v="+vcode
+		elif "nytimes.com" in url:
+			new_url = url.split("?")[0]
+		
+		return new_url
+					
+	def single_standardize_url(self,url):
+
+		knw_params = [	"fbclid","ocid","feature","r","cid_source","utm_source",
+	       			"recruiter","type","set","print","wtrid","ito","rcode",
+					"utm_medium","utm_campaign","smtyp","smid","d=n","do",
+					"amp","mktci","mktcval","list","keywords","utm_medium=social",
+					"utm_content","utm_term","utm_name","add_slides","mktcid",
+					"wt_zmc","CMP","utm_referrer","ns_mchannel","ns_campaign",
+					"noredirect","ncid","dmcid","from","highlightedUpdateUrns",
+					"__twitter_impression","soc_trk","referrer","telegram","ref",
+					"soc_src","src","ref_src","at_medium","at_campaign","cmp",
+					"flattrss_redirect","guccounter","guce_referrer_sig","guce_referrer",
+					"m=1","cmd=simple","vh=e","&_rdr","refsrc"]	
+		to_be_added = ["feedName","feedType"]
+
+		if not self.url_valid(url):
+			return None
+		else:
+			new_url = self.lower_case_domain(url)
+			new_url = self.sanitize_url_prefix(new_url)
+			new_url = self.clean_special_case(new_url)
+			new_url = new_url.replace("amp%3B","")
+			new_url = new_url.replace("amp;","")
+
+			ptypes = ["?","&","%3F","#"]
+
+			if any(ptype in new_url for ptype in ptypes):
+				for p in knw_params:
+					for ptype in ptypes:
+						pp = ptype+str(p)+"="
+						pp_s = ptype+str(p)
+						if pp in new_url:
+							after_eq = new_url.split(pp)[-1].split("&")[0]
+							rpp = pp+after_eq
+							new_url = new_url.replace(rpp,"")
+						if pp_s in new_url and new_url.strip().endswith(pp_s):
+							new_url = new_url.replace(pp_s,"")
+
+			new_url = self._recursive_trim(new_url)
+			new_url = self.remove_url_prefix(new_url)
+		
+		if not self.url_valid(new_url):
+			return None
+		else:
+			return new_url
 
 	def single_clean_url(self,url):
 
@@ -76,6 +166,9 @@ class LinkUtils:
 
 		while url[-1].isalnum() == False:
 			url = url[:-1]
+		if len(str(url)) >= 6 and str(url)[-6] == "%C2%AB": url = str(url)[:-6]
+		while url[0].isalnum() == False:
+			url = url[1:]
 		return url
 
 	def sanitize_url_prefix(self,url):
@@ -83,6 +176,9 @@ class LinkUtils:
 		if "WWW." in url: url = url.replace("WWW.","www.")
 		if "HTTPS:" in url: url = url.replace("HTTPS:","https:")
 		if "HTTP:" in url: url = url.replace("HTTP:","http:")
+		if "Www." in url: url = url.replace("Www.","www.")
+		if "Https:" in url: url = url.replace("Https:","https:")
+		if "Http:" in url: url = url.replace("Http:","http:")
 		if "www." in url and "http" in url:
 			url = url.replace("www.","")
 		if "www." in url and "http" not in url:
@@ -132,12 +228,18 @@ class LinkUtils:
 		if "www." in new_url:
 			new_url = new_url.replace("www.","")
 
+		if "www2." in new_url:
+			new_url = new_url.replace("www2.","")
+		
+		if "www12." in new_url:
+			new_url = new_url.replace("www12.","")
+
 		return new_url
 
 	def is_url_domain(self,url):
 
 		new_url = self.remove_url_prefix(url)
-		if len(new_url) < 2: return False
+		if new_url is None or len(new_url) < 2: return False
 		new_url = self.strip_backslash(new_url)
 
 		if new_url == self.extract_domain(url) or new_url == self.extract_domain(str(url).replace("www.","https://")):
@@ -210,7 +312,11 @@ class LinkUtils:
 				domain = url.replace("www.","")
 		except:
 			domain = url.split("/")[0]
+		if "." not in str(domain):
+			domain = None
 
+		if domain is not None:
+			domain = domain.lower()
 		return domain
 
 	def extract_str_domain(self,url):
@@ -218,9 +324,14 @@ class LinkUtils:
 		final_dom = None
 		if "." in str(url):
 			if "http" in url or "www." in url:
-				final_dom = urlparse(url).netloc
-				if self.remove_url_prefix(final_dom) is not None: final_dom = self.remove_url_prefix(final_dom)
-				final_dom = final_dom.replace("www.","")
+				try:
+					final_dom = urlparse(url).netloc
+					if self.remove_url_prefix(final_dom) is not None: final_dom = self.remove_url_prefix(final_dom)
+					final_dom = final_dom.replace("www.","")
+				except:
+					final_dom = url.split("/")[0]
+					if self.remove_url_prefix(final_dom) is not None: final_dom = self.remove_url_prefix(final_dom)
+					final_dom = final_dom.replace("www.","")
 			else:
 				dom_parts = url.split(".")
 				if len(dom_parts) > 1:
@@ -238,6 +349,10 @@ class LinkUtils:
 
 						final_dom = final_dom.strip()
 						if len(final_dom) < 1: final_dom = None
+		if "." not in str(final_dom):
+			final_dom = None
+		if final_dom is not None:
+			final_dom = final_dom.lower()
 		return final_dom
 
 
@@ -273,14 +388,14 @@ class LinkUtils:
 				elif "/vk.com/" in url or ".vk.com/"  in url:
 					special_url = "https://vk.com/"+self.extract_username(url)
 				else:
-					special_url = self.extract_domain(full_url)
+					special_url = self.extract_str_domain(full_url)
 			except:
 				#print (full_url)
 				pass
 		else:
-			special_url = self.extract_domain(full_url)
+			special_url = self.extract_str_domain(full_url)
 		if special_url is None:
-			special_url = self.extract_domain(full_url)
+			special_url = self.extract_str_domain(full_url)
 		return special_url
 
 
@@ -465,9 +580,9 @@ class LinkCleaner(LinkUtils):
 			if "channel/" in url:
 				username = str(url).split("channel/")[-1]
 			elif "user/" in url:
-				 username = str(url).split("user/")[-1]
+				username = str(url).split("user/")[-1]
 			elif "/c/" in url:
-				 username = str(url).split("/c/")[-1]
+				username = str(url).split("/c/")[-1]
 			else:
 				username = str(url).split("/")[-1]
 			if "/" in username: username = username.split("/")[0]
